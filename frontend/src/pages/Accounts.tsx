@@ -1,22 +1,41 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { PlusCircle, CreditCard } from 'lucide-react';
+import { CreditCard, PlusCircle, CheckCircle2, Sparkles, Landmark } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Accounts() {
   const { customerId } = useAuth();
   const navigate = useNavigate();
-  const [accountType, setAccountType] = useState('Savings');
+  const [accountType, setAccountType] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState({ text: '', type: '' });
 
+  const accountOptions = [
+    {
+      type: 'Savings',
+      icon: Landmark,
+      color: 'var(--accent-primary)',
+      colorRgb: 'var(--accent-primary-rgb)',
+      description: 'Ideal for personal savings with competitive interest rates.',
+      features: ['No minimum balance', '₹5,000 starting credit', '4% annual interest', 'Free debit card'],
+    },
+    {
+      type: 'Current',
+      icon: Sparkles,
+      color: 'var(--accent-secondary)',
+      colorRgb: 'var(--accent-secondary-rgb)',
+      description: 'Perfect for business transactions with higher limits.',
+      features: ['Higher daily limits', '₹5,000 starting credit', 'Overdraft facility', 'Checkbook included'],
+    }
+  ];
+
   const handleOpenAccount = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!accountType) return;
     setLoading(true);
     setMsg({ text: '', type: '' });
 
-    // Generate a random 12-digit account number as a mockup for "KYC approved" issuance
     const generatedAccNo = 'AC' + Math.floor(1000000000 + Math.random() * 9000000000).toString();
 
     try {
@@ -24,18 +43,14 @@ export default function Accounts() {
         customer_id: customerId,
         account_type: accountType,
         account_number: generatedAccNo,
-        balance: 5000.00, // Promotional starting balance
+        balance: 5000.00,
         status: 'Active',
       }]);
 
       if (error) throw error;
-      
-      setMsg({ text: `Success! Created newly opened ${accountType} account: # ${generatedAccNo}. Starting balance: ₹5,000 added.`, type: 'success' });
-      
-      // Let them read it for a moment, then redirect to Dashboard
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 3000);
+
+      setMsg({ text: `✓ ${accountType} Account created: #${generatedAccNo.match(/.{1,4}/g)?.join(' ')}. ₹5,000 credited!`, type: 'success' });
+      setTimeout(() => navigate('/dashboard'), 3000);
     } catch (err: any) {
       setMsg({ text: err.message, type: 'danger' });
     } finally {
@@ -45,49 +60,97 @@ export default function Accounts() {
 
   return (
     <>
-      <div className="page-header">
+      <div className="page-header fade-in">
         <div>
-          <h1 className="text-gradient">Open New Account</h1>
-          <p style={{ color: 'var(--text-muted)' }}>Instantly open a Savings or Current checking account online.</p>
+          <h1 className="text-gradient" style={{ fontSize: '1.75rem' }}>Open New Account</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
+            Instantly open a Savings or Current account online with digital KYC
+          </p>
         </div>
       </div>
 
-      <div className="glass-panel" style={{ maxWidth: '500px' }}>
+      <div style={{ maxWidth: '700px' }} className="fade-in delay-1">
         {msg.text && (
-          <div className={`badge ${msg.type}`} style={{ padding: '16px', display: 'block', marginBottom: '20px', borderRadius: '8px', fontSize: '0.9rem', textTransform: 'none' }}>
+          <div className={`alert ${msg.type === 'success' ? 'alert-success' : 'alert-danger'}`}>
+            {msg.type === 'success' ? <CheckCircle2 size={18} /> : <CreditCard size={18} />}
             {msg.text}
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-          <div style={{ background: 'rgba(52, 152, 219, 0.1)', padding: '16px', borderRadius: '12px' }}>
-            <CreditCard size={32} color="var(--accent-blue)" />
-          </div>
-          <div>
-            <h3 style={{ margin: 0 }}>KYC Approved Standard</h3>
-            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Your digital KYC lets you open instantly.</p>
-          </div>
+        {/* Account Type Selection */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '28px' }}>
+          {accountOptions.map(opt => {
+            const isSelected = accountType === opt.type;
+            return (
+              <div
+                key={opt.type}
+                onClick={() => setAccountType(opt.type)}
+                style={{
+                  padding: '24px', borderRadius: 'var(--radius-lg)', cursor: 'pointer',
+                  background: isSelected ? `rgba(${opt.colorRgb.replace('var(', '').replace(')', '')}, 0.06)` : 'var(--bg-elevated)',
+                  border: isSelected ? `2px solid ${opt.color}` : '2px solid var(--border-subtle)',
+                  transition: 'all 0.25s ease',
+                  transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                }}
+              >
+                <div style={{
+                  width: '48px', height: '48px', borderRadius: '14px',
+                  background: `rgba(${opt.colorRgb.replace('var(', '').replace(')', '')}, 0.1)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: '14px', color: opt.color
+                }}>
+                  <opt.icon size={24} />
+                </div>
+
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '6px' }}>{opt.type} Account</h3>
+                <p style={{ color: 'var(--text-tertiary)', fontSize: '0.82rem', marginBottom: '14px', lineHeight: '1.5' }}>
+                  {opt.description}
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {opt.features.map(f => (
+                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <CheckCircle2 size={13} color={opt.color} /> {f}
+                    </div>
+                  ))}
+                </div>
+
+                {isSelected && (
+                  <div style={{ marginTop: '14px', textAlign: 'center' }}>
+                    <span className="badge success" style={{ fontSize: '0.72rem' }}>Selected</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        <form onSubmit={handleOpenAccount}>
-          <div className="form-group">
-            <label>Select Account Type</label>
-            <select className="form-control" value={accountType} onChange={e => setAccountType(e.target.value)}>
-              <option value="Savings">Savings Account</option>
-              <option value="Current">Current Account</option>
-            </select>
+        {/* Note + Button */}
+        <div className="glass-panel-static">
+          <div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.15)', borderRadius: 'var(--radius-sm)', marginBottom: '20px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            <strong style={{ color: 'var(--text-primary)' }}>Note:</strong> By clicking Open Account, you agree to our banking terms.
+            A complimentary starting balance of ₹5,000 will be credited immediately to your new account.
           </div>
 
-          <div style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '20px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            <strong>Note:</strong> By clicking Open Account, you agree to our banking terms. 
-            A complimentary starting balance of ₹5,000 will be credited directly to your account immediately.
-          </div>
-
-          <button type="submit" className="btn-primary" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }} disabled={loading}>
-            <PlusCircle size={18} />
-            {loading ? 'Processing network connection...' : 'Confirm & Open Account'}
+          <button
+            onClick={handleOpenAccount as any}
+            className="btn-primary"
+            style={{ width: '100%', padding: '14px' }}
+            disabled={loading || !accountType}
+          >
+            {loading ? (
+              <>
+                <div className="spinner" style={{ width: '16px', height: '16px', borderColor: 'rgba(6,11,24,0.2)', borderTopColor: '#060B18' }} />
+                Processing...
+              </>
+            ) : (
+              <>
+                <PlusCircle size={18} />
+                {accountType ? `Open ${accountType} Account` : 'Select an Account Type'}
+              </>
+            )}
           </button>
-        </form>
+        </div>
       </div>
     </>
   );

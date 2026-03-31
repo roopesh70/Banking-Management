@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 // For simplicity in this DBMS project, we'll store customer_id in state after our custom RPC login
 type AuthContextType = {

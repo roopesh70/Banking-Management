@@ -1,7 +1,6 @@
-import { ReactNode } from 'react';
 import { Navigate, Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LayoutDashboard, Send, Users, LogOut, FileText, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Send, Users, LogOut, FileText, CreditCard, Shield } from 'lucide-react';
 
 export default function DashboardLayout() {
   const { customerId, logout } = useAuth();
@@ -19,7 +18,7 @@ export default function DashboardLayout() {
 
   const menuItems = [
     { name: 'Overview', icon: LayoutDashboard, path: '/dashboard' },
-    { name: 'Open Account', icon: CreditCard, path: '/accounts' },
+    { name: 'Accounts', icon: CreditCard, path: '/accounts' },
     { name: 'Transfers', icon: Send, path: '/transfer' },
     { name: 'Beneficiaries', icon: Users, path: '/beneficiaries' },
     { name: 'Loans', icon: FileText, path: '/loans' },
@@ -28,40 +27,53 @@ export default function DashboardLayout() {
   return (
     <div className="admin-layout">
       <aside className="sidebar">
-        <div style={{ padding: '0 0 24px 0', borderBottom: '1px solid var(--border-light)' }}>
-          <h2 className="text-gradient" style={{ fontSize: '1.5rem', fontWeight: 700 }}>AeroBank</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>Premium Banking</p>
+        {/* Brand */}
+        <div className="sidebar-brand" style={{ padding: '0 8px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.1rem', fontWeight: 800, color: '#060B18'
+            }}>A</div>
+            <div>
+              <h2 style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.2 }}>AeroBank</h2>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '0.72rem', fontWeight: 500 }}>Customer Portal</p>
+            </div>
+          </div>
         </div>
 
-        <nav style={{ flex: 1, marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* Navigation */}
+        <nav style={{ flex: 1, marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span className="sidebar-section-label">Banking</span>
           {menuItems.map(item => {
             const isActive = location.pathname === item.path;
             return (
-              <Link 
-                to={item.path} 
+              <Link
+                to={item.path}
                 key={item.name}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
-                  borderRadius: 'var(--radius-button)', textDecoration: 'none',
-                  color: isActive ? 'var(--text-main)' : 'var(--text-muted)',
-                  background: isActive ? 'rgba(52, 152, 219, 0.1)' : 'transparent',
-                  fontWeight: isActive ? 600 : 500,
-                  transition: 'all 0.2s ease'
-                }}
+                className={`nav-item ${isActive ? 'active' : ''}`}
               >
-                <item.icon size={20} style={{ color: isActive ? 'var(--accent-blue)' : 'inherit' }} />
+                <item.icon size={19} />
                 {item.name}
               </Link>
             );
           })}
+
+          <span className="sidebar-section-label">Administration</span>
+          <Link to="/admin" className={`nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}>
+            <Shield size={19} />
+            Admin Panel
+          </Link>
         </nav>
 
-        <button 
+        {/* Logout */}
+        <button
           onClick={handleLogout}
-          className="btn-secondary" 
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          className="btn-secondary sidebar-logout"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '12px' }}
         >
-          <LogOut size={18} />
+          <LogOut size={17} />
           Sign Out
         </button>
       </aside>
