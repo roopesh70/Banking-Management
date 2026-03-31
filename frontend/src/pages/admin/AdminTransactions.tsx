@@ -1,18 +1,37 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { ArrowLeftRight, Search, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminTransactions() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     async function load() {
       setLoading(true);
+      
+      let allowedAccountIds: string[] = [];
+      if (user?.role === 'manager' && user.branch_id) {
+        const accRes = await supabase.from('account').select('account_id').eq('branch_id', user.branch_id);
+        allowedAccountIds = (accRes.data || []).map(a => a.account_id);
+      }
+
       let query = supabase.from('transaction').select('*').order('timestamp', { ascending: false }).limit(200);
       if (filterType) query = query.eq('type', filterType);
+
+      if (user?.role === 'manager' && user.branch_id) {
+        if (allowedAccountIds.length > 0) {
+          query = query.or(`from_account_id.in.(${allowedAccountIds.join(',')}),to_account_id.in.(${allowedAccountIds.join(',')})`);
+        } else {
+          // Force empty result if branch has no accounts
+          query = query.eq('transaction_id', '00000000-0000-0000-0000-000000000000');
+        }
+      }
+
       const { data } = await query;
       if (data) setTransactions(data);
       setLoading(false);

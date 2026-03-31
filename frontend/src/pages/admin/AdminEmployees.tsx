@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Search, Plus, X, Save } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminEmployees() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -10,13 +11,21 @@ export default function AdminEmployees() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', role: '', department: '', branch_id: '' });
+  const { user } = useAuth();
 
   async function loadData() {
     setLoading(true);
-    const [empRes, branchRes] = await Promise.all([
-      supabase.from('employee').select('*, branch:branch_id(branch_name)').order('name'),
-      supabase.from('branch').select('*'),
-    ]);
+    
+    let empQuery = supabase.from('employee').select('*, branch:branch_id(branch_name)').order('name');
+    let branchQuery = supabase.from('branch').select('*');
+    
+    if (user?.role === 'manager' && user.branch_id) {
+      empQuery = empQuery.eq('branch_id', user.branch_id);
+      branchQuery = branchQuery.eq('branch_id', user.branch_id);
+    }
+
+    const [empRes, branchRes] = await Promise.all([ empQuery, branchQuery ]);
+    
     if (empRes.data) setEmployees(empRes.data);
     if (branchRes.data) setBranches(branchRes.data);
     setLoading(false);
@@ -57,9 +66,12 @@ export default function AdminEmployees() {
             Manage bank staff records and branch assignments (REQ-20, REQ-21)
           </p>
         </div>
-        <button className="btn-primary" onClick={() => { setShowForm(true); setEditId(null); setForm({ name: '', role: '', department: '', branch_id: '' }); }}>
-          <Plus size={16} /> Add Employee
-        </button>
+        
+        {user?.role === 'admin' && (
+          <button className="btn-primary" onClick={() => { setShowForm(true); setEditId(null); setForm({ name: '', role: '', department: '', branch_id: '' }); }}>
+            <Plus size={16} /> Add Employee
+          </button>
+        )}
       </div>
 
       {/* Add/Edit Form */}
@@ -131,9 +143,13 @@ export default function AdminEmployees() {
                     <td style={{ color: 'var(--text-secondary)' }}>{emp.department}</td>
                     <td style={{ color: 'var(--text-secondary)' }}>{(emp.branch as any)?.branch_name || '—'}</td>
                     <td>
-                      <button className="btn-secondary" onClick={() => startEdit(emp)} style={{ fontSize: '0.78rem', padding: '6px 12px' }}>
-                        Edit
-                      </button>
+                      {user?.role === 'admin' ? (
+                        <button className="btn-secondary" onClick={() => startEdit(emp)} style={{ fontSize: '0.78rem', padding: '6px 12px' }}>
+                          Edit
+                        </button>
+                      ) : (
+                        <span className="badge info">View Only</span>
+                      )}
                     </td>
                   </tr>
                 ))}

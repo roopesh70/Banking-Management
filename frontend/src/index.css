@@ -5,28 +5,28 @@
    ═══════════════════════════════════════ */
 
 :root {
-  /* Core Palette — Deep Navy + Cyan Accents */
-  --bg-deep: #060B18;
-  --bg-surface: #0C1224;
-  --bg-card: #111A2E;
-  --bg-card-hover: #162040;
-  --bg-elevated: rgba(17, 26, 46, 0.85);
+  /* Core Palette — Vivid Light Theme */
+  --bg-deep: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F1F5F9;
+  --bg-elevated: rgba(255, 255, 255, 0.9);
 
-  --accent-primary: #00D1FF;
-  --accent-primary-rgb: 0, 209, 255;
-  --accent-secondary: #7B61FF;
-  --accent-secondary-rgb: 123, 97, 255;
-  --accent-emerald: #34D399;
-  --accent-emerald-rgb: 52, 211, 153;
-  --accent-amber: #FBBF24;
-  --accent-amber-rgb: 251, 191, 36;
+  --accent-primary: #0EA5E9;
+  --accent-primary-rgb: 14, 165, 233;
+  --accent-secondary: #8B5CF6;
+  --accent-secondary-rgb: 139, 92, 246;
+  --accent-emerald: #10B981;
+  --accent-emerald-rgb: 16, 185, 129;
+  --accent-amber: #F59E0B;
+  --accent-amber-rgb: 245, 158, 11;
 
-  --text-primary: #F1F5F9;
-  --text-secondary: #94A3B8;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
   --text-tertiary: #64748B;
 
-  --success: #22C55E;
-  --success-rgb: 34, 197, 94;
+  --success: #10B981;
+  --success-rgb: 16, 185, 129;
   --danger: #EF4444;
   --danger-rgb: 239, 68, 68;
   --warning: #F59E0B;
@@ -35,14 +35,14 @@
   --info-rgb: 59, 130, 246;
 
   /* Borders & Shadows */
-  --border-subtle: rgba(148, 163, 184, 0.08);
-  --border-default: rgba(148, 163, 184, 0.12);
-  --border-focus: rgba(0, 209, 255, 0.4);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
-  --shadow-glow-cyan: 0 0 20px rgba(0, 209, 255, 0.15);
-  --shadow-glow-purple: 0 0 20px rgba(123, 97, 255, 0.15);
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --border-default: rgba(15, 23, 42, 0.12);
+  --border-focus: rgba(14, 165, 233, 0.4);
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 8px 32px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 16px 48px rgba(15, 23, 42, 0.12);
+  --shadow-glow-cyan: 0 0 20px rgba(14, 165, 233, 0.25);
+  --shadow-glow-purple: 0 0 20px rgba(139, 92, 246, 0.25);
 
   /* Geometry */
   --radius-xs: 6px;
@@ -246,8 +246,8 @@ a:hover { text-decoration: underline; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, var(--accent-primary), #0099CC);
-  color: #060B18;
+  background: linear-gradient(135deg, var(--accent-primary), #0284C7);
+  color: #FFFFFF;
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 0.925rem;
@@ -292,7 +292,7 @@ a:hover { text-decoration: underline; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(15, 23, 42, 0.04);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   font-family: var(--font-sans);
@@ -306,8 +306,8 @@ a:hover { text-decoration: underline; }
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(15, 23, 42, 0.08);
+  border-color: rgba(15, 23, 42, 0.18);
   transform: translateY(-1px);
 }
 
@@ -370,7 +370,7 @@ a:hover { text-decoration: underline; }
 }
 
 .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.06);
   color: var(--text-primary);
   border-color: var(--border-default);
 }
@@ -395,7 +395,7 @@ a:hover { text-decoration: underline; }
 }
 
 .form-control {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.85);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
   padding: 13px 16px;
@@ -414,7 +414,7 @@ a:hover { text-decoration: underline; }
   outline: none;
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.1), var(--shadow-glow-cyan);
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 1);
 }
 
 select.form-control {
@@ -620,7 +620,7 @@ select.form-control option {
 }
 
 .data-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(15, 23, 42, 0.02);
 }
 
 .data-table tr:last-child td {
@@ -763,7 +763,7 @@ select.form-control option {
 
 .auth-tabs {
   display: flex;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(15, 23, 42, 0.05);
   border-radius: var(--radius-sm);
   padding: 4px;
   margin-bottom: 28px;

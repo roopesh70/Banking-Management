@@ -3,11 +3,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LayoutDashboard, Send, Users, LogOut, FileText, CreditCard, Shield } from 'lucide-react';
 
 export default function DashboardLayout() {
-  const { customerId, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  if (!customerId) {
+  if (!user || user.role !== 'customer') {
     return <Navigate to="/login" replace />;
   }
 

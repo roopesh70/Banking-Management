@@ -6,26 +6,28 @@ import {
 } from 'lucide-react';
 
 export default function AdminLayout() {
-  const { customerId, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  if (!customerId) {
+  if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
     return <Navigate to="/login" replace />;
   }
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
-  const menuItems = [
+  const allMenuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
     { name: 'Customers', icon: Users, path: '/admin/customers' },
     { name: 'Employees', icon: UserCog, path: '/admin/employees' },
     { name: 'Accounts', icon: CreditCard, path: '/admin/accounts' },
     { name: 'Transactions', icon: ArrowLeftRight, path: '/admin/transactions' },
     { name: 'Loans', icon: FileText, path: '/admin/loans' },
-    { name: 'Audit Logs', icon: ScrollText, path: '/admin/audit' },
-    { name: 'Financials', icon: DollarSign, path: '/admin/financials' },
+    { name: 'Audit Logs', icon: ScrollText, path: '/admin/audit', adminOnly: true },
+    { name: 'Financials', icon: DollarSign, path: '/admin/financials', adminOnly: true },
   ];
+
+  const menuItems = allMenuItems.filter(item => !item.adminOnly || user.role === 'admin');
 
   return (
     <div className="admin-layout">
@@ -42,7 +44,9 @@ export default function AdminLayout() {
             </div>
             <div>
               <h2 style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.2 }}>AeroBank</h2>
-              <p style={{ color: 'var(--accent-secondary)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Admin Panel</p>
+              <p style={{ color: 'var(--accent-secondary)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {user.role === 'admin' ? 'Admin Panel' : 'Manager Panel'}
+              </p>
             </div>
           </div>
         </div>
@@ -59,11 +63,15 @@ export default function AdminLayout() {
             );
           })}
 
-          <span className="sidebar-section-label">Portal</span>
-          <Link to="/dashboard" className="nav-item">
-            <ArrowLeft size={19} />
-            Customer View
-          </Link>
+          {user.role === 'admin' && (
+            <>
+              <span className="sidebar-section-label">Portal</span>
+              <Link to="/dashboard" className="nav-item">
+                <ArrowLeft size={19} />
+                Customer View
+              </Link>
+            </>
+          )}
         </nav>
 
         <button onClick={handleLogout} className="btn-secondary sidebar-logout" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '12px' }}>

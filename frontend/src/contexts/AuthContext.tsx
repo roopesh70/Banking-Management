@@ -1,35 +1,42 @@
 import React, { createContext, useContext, useState } from 'react';
 
-// For simplicity in this DBMS project, we'll store customer_id in state after our custom RPC login
+export type AuthUser = {
+  id: string;
+  role: 'customer' | 'manager' | 'admin';
+  department?: string;
+  branch_id?: string;
+};
+
 type AuthContextType = {
-  customerId: string | null;
-  login: (id: string) => void;
+  user: AuthUser | null;
+  login: (u: AuthUser) => void;
   logout: () => void;
 };
 
 const AuthContext = createContext<AuthContextType>({
-  customerId: null,
+  user: null,
   login: () => {},
   logout: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [customerId, setCustomerId] = useState<string | null>(() => {
-    return localStorage.getItem('s_auth_id');
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const saved = localStorage.getItem('s_auth_user');
+    return saved ? JSON.parse(saved) : null;
   });
 
-  const login = (id: string) => {
-    setCustomerId(id);
-    localStorage.setItem('s_auth_id', id);
+  const login = (u: AuthUser) => {
+    setUser(u);
+    localStorage.setItem('s_auth_user', JSON.stringify(u));
   };
 
   const logout = () => {
-    setCustomerId(null);
-    localStorage.removeItem('s_auth_id');
+    setUser(null);
+    localStorage.removeItem('s_auth_user');
   };
 
   return (
-    <AuthContext.Provider value={{ customerId, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

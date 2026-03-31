@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Search, Lock, Unlock } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminAccounts() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   async function loadData() {
     setLoading(true);
     let query = supabase.from('account').select('*, customer:customer_id(name, email)').order('account_number');
     if (filterStatus) query = query.eq('status', filterStatus);
+    if (user?.role === 'manager' && user.branch_id) {
+      query = query.eq('branch_id', user.branch_id);
+    }
     const { data } = await query;
     if (data) setAccounts(data);
     setLoading(false);

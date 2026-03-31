@@ -13,13 +13,19 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [roleType, setRoleType] = useState<'customer' | 'manager' | 'admin'>('customer');
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const { data, error: rpcError } = await supabase.rpc('authenticate_user', {
+      let rpcName = 'authenticate_user';
+      if (roleType === 'manager') rpcName = 'authenticate_employee';
+      if (roleType === 'admin') rpcName = 'authenticate_admin';
+
+      const { data, error: rpcError } = await supabase.rpc(rpcName, {
         p_username: username,
         p_password: password,
         p_ip: '127.0.0.1'
@@ -28,8 +34,16 @@ export default function Login() {
       if (rpcError) throw rpcError;
 
       if (data && data.success) {
-        login(data.customer_id);
-        navigate('/dashboard');
+        if (roleType === 'customer') {
+          login({ id: data.customer_id, role: 'customer' });
+          navigate('/dashboard');
+        } else if (roleType === 'manager') {
+          login({ id: data.user_id, role: 'manager', department: data.department, branch_id: data.branch_id });
+          navigate('/admin');
+        } else if (roleType === 'admin') {
+          login({ id: data.user_id, role: 'admin' });
+          navigate('/admin');
+        }
       } else {
         setError(data?.message || 'Login failed. Please check credentials.');
       }
@@ -43,15 +57,31 @@ export default function Login() {
   return (
     <div className="auth-card fade-in-scale">
       {/* Tab Navigation */}
-      <div className="auth-tabs">
-        <button className="auth-tab active">Sign In</button>
-        <Link to="/register" style={{ textDecoration: 'none', flex: 1 }}>
-          <button className="auth-tab" style={{ width: '100%' }}>Create Account</button>
-        </Link>
+      <div className="auth-tabs" style={{ marginBottom: '16px' }}>
+        <button 
+          className={`auth-tab ${roleType === 'customer' ? 'active' : ''}`}
+          onClick={() => setRoleType('customer')}
+        >Customer</button>
+        <button 
+          className={`auth-tab ${roleType === 'manager' ? 'active' : ''}`}
+          onClick={() => setRoleType('manager')}
+        >Manager</button>
+        <button 
+          className={`auth-tab ${roleType === 'admin' ? 'active' : ''}`}
+          onClick={() => setRoleType('admin')}
+        >Admin</button>
       </div>
 
+      {roleType === 'customer' && (
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
+            <Link to="/register" style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>Create an account</Link> if you don't have one.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
         <div style={{
           width: '56px', height: '56px', borderRadius: '16px',
           background: 'rgba(var(--accent-primary-rgb), 0.1)',
@@ -61,9 +91,11 @@ export default function Login() {
         }}>
           <Shield size={28} color="var(--accent-primary)" />
         </div>
-        <h2 style={{ fontSize: '1.4rem', marginBottom: '6px' }}>Welcome Back</h2>
+        <h2 style={{ fontSize: '1.4rem', marginBottom: '6px' }}>
+          {roleType === 'customer' ? 'Sign In' : roleType === 'manager' ? 'Manager Portal' : 'Admin Portal'}
+        </h2>
         <p style={{ color: 'var(--text-tertiary)', fontSize: '0.88rem' }}>
-          Enter your credentials to access your accounts
+          {roleType === 'customer' ? 'Enter credentials to access your account' : 'Authorized personnel only'}
         </p>
       </div>
 
@@ -139,15 +171,6 @@ export default function Login() {
           ) : 'Sign In to Dashboard'}
         </button>
       </form>
-
-      <div style={{ textAlign: 'center', marginTop: '20px' }}>
-        <p style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
-          Don't have an account?{' '}
-          <Link to="/register" style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>
-            Create one now
-          </Link>
-        </p>
-      </div>
     </div>
   );
 }

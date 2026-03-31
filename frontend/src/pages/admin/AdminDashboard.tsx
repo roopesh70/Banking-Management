@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Users, CreditCard, ArrowLeftRight, FileText, BadgeDollarSign, TrendingUp, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -8,20 +9,53 @@ export default function AdminDashboard() {
     pendingLoans: 0, totalDeposits: 0, totalWithdrawals: 0, frozenAccounts: 0,
   });
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     async function load() {
+      let allowedAccountIds: string[] = [];
+      if (user?.role === 'manager' && user.branch_id) {
+        const accRes = await supabase.from('account').select('account_id').eq('branch_id', user.branch_id);
+        allowedAccountIds = (accRes.data || []).map(a => a.account_id);
+      }
+
+      let accQuery = supabase.from('account').select('*', { count: 'exact', head: true });
+      if (user?.role === 'manager' && user.branch_id) accQuery = accQuery.eq('branch_id', user.branch_id);
+
+      let frozenQuery = supabase.from('account').select('*', { count: 'exact', head: true }).eq('status', 'Frozen');
+      if (user?.role === 'manager' && user.branch_id) frozenQuery = frozenQuery.eq('branch_id', user.branch_id);
+
+      let txQuery = supabase.from('transaction').select('*', { count: 'exact', head: true });
+      if (user?.role === 'manager' && user.branch_id) {
+         if (allowedAccountIds.length > 0) {
+           txQuery = txQuery.or(`from_account_id.in.(${allowedAccountIds.join(',')}),to_account_id.in.(${allowedAccountIds.join(',')})`);
+         } else {
+           txQuery = txQuery.eq('transaction_id', '00000000-0000-0000-0000-000000000000');
+         }
+      }
+
       const [custRes, accRes, txRes, loanRes, frozenRes] = await Promise.all([
         supabase.from('customer').select('*', { count: 'exact', head: true }),
-        supabase.from('account').select('*', { count: 'exact', head: true }),
-        supabase.from('transaction').select('*', { count: 'exact', head: true }),
+        accQuery,
+        txQuery,
         supabase.from('loan').select('*', { count: 'exact', head: true }).eq('status', 'Pending'),
-        supabase.from('account').select('*', { count: 'exact', head: true }).eq('status', 'Frozen'),
+        frozenQuery,
       ]);
 
-      // Sum deposits and withdrawals
-      const { data: deposits } = await supabase.from('transaction').select('amount').eq('type', 'Deposit').eq('status', 'Completed');
-      const { data: withdrawals } = await supabase.from('transaction').select('amount').eq('type', 'Withdrawal').eq('status', 'Completed');
+      let depQuery = supabase.from('transaction').select('amount').eq('type', 'Deposit').eq('status', 'Completed');
+      let withQuery = supabase.from('transaction').select('amount').eq('type', 'Withdrawal').eq('status', 'Completed');
+
+      if (user?.role === 'manager' && user.branch_id) {
+        if (allowedAccountIds.length > 0) {
+          depQuery = depQuery.in('to_account_id', allowedAccountIds);
+          withQuery = withQuery.in('from_account_id', allowedAccountIds);
+        } else {
+          depQuery = depQuery.eq('transaction_id', 'none');
+          withQuery = withQuery.eq('transaction_id', 'none');
+        }
+      }
+
+      const [{ data: deposits }, { data: withdrawals }] = await Promise.all([ depQuery, withQuery ]);
 
       const totalDep = (deposits || []).reduce((s, t) => s + Number(t.amount), 0);
       const totalWith = (withdrawals || []).reduce((s, t) => s + Number(t.amount), 0);
