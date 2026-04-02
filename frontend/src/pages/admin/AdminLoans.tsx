@@ -18,7 +18,7 @@ export default function AdminLoans() {
       const { data, error } = await supabase.rpc('simulate_cron_engine');
       if (error) throw error;
       setCronMsg({ 
-        text: `CRON Success! Flagged ${data.overdue_marked} overdue EMIs. Sent ${data.reminders_sent} 5-day auto-reminders.`, 
+        text: `CRON Success! Flagged ${data.overdue_marked} overdue EMIs, processed ${data.standing_instructions_processed || 0} standing instructions.`, 
         type: 'success' 
       });
       loadData();

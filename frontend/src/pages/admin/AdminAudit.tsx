@@ -87,56 +87,64 @@ export default function AdminAudit() {
           {/* Search */}
           <div className="relative lg:col-span-2">
             <Search size={18} className="absolute top-1/2 left-5 -translate-y-1/2 text-secondary" />
-            <div className="relative">
-              <Filter size={14} className="absolute top-1/2 left-5 -translate-y-1/2 text-secondary pointer-events-none" />
-              <select aria-label="Filter by event type" className="w-full bg-app text-primary rounded-full pl-10 pr-6 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 appearance-none shadow-sm" value={filterEvent} onChange={e => setFilterEvent(e.target.value)}>
-                <option value="">All Events</option>
-                <optgroup label="Auth Events">
-                  <option value="LOGIN_SUCCESS">Login Success</option>
-                  <option value="LOGIN_FAILED">Login Failed</option>
-                  <option value="LOGOUT">Logout</option>
-                  <option value="ACCOUNT_LOCKED">Account Locked</option>
-                  <option value="PASSWORD_RESET">Password Reset</option>
-                </optgroup>
-                <optgroup label="Data Events">
-                  <option value="account_INSERT">Account Created</option>
-                  <option value="account_UPDATE">Account Updated</option>
-                  <option value="loan_INSERT">Loan Created</option>
-                  <option value="loan_UPDATE">Loan Updated</option>
-                  <option value="transaction_INSERT">Transaction Created</option>
-                  <option value="transaction_UPDATE">Transaction Updated</option>
-                </optgroup>
-              </select>
-            </div>
+            <input 
+              type="text" 
+              className="w-full bg-app text-primary rounded-full pl-12 pr-6 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 shadow-sm transition-all" 
+              placeholder="Search user, event, or description..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
 
-            {/* Table Filter */}
-            <select aria-label="Filter by table" className="w-full bg-app text-primary rounded-full px-6 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 appearance-none shadow-sm" value={filterTable} onChange={e => setFilterTable(e.target.value)}>
+          {/* Event Filter */}
+          <div className="relative">
+            <Filter size={14} className="absolute top-1/2 left-5 -translate-y-1/2 text-secondary pointer-events-none" />
+            <select aria-label="Filter by event type" className="w-full bg-app text-primary rounded-full pl-10 pr-6 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 appearance-none shadow-sm cursor-pointer" value={filterEvent} onChange={e => setFilterEvent(e.target.value)}>
+              <option value="">All Events</option>
+              <optgroup label="Auth Events">
+                <option value="LOGIN_SUCCESS">Login Success</option>
+                <option value="LOGIN_FAILED">Login Failed</option>
+                <option value="LOGOUT">Logout</option>
+                <option value="ACCOUNT_LOCKED">Account Locked</option>
+                <option value="PASSWORD_RESET">Password Reset</option>
+              </optgroup>
+              <optgroup label="Data Events">
+                <option value="account_INSERT">Account Created</option>
+                <option value="account_UPDATE">Account Updated</option>
+                <option value="loan_INSERT">Loan Created</option>
+                <option value="loan_UPDATE">Loan Updated</option>
+                <option value="transaction_INSERT">Transaction Created</option>
+                <option value="transaction_UPDATE">Transaction Updated</option>
+              </optgroup>
+            </select>
+          </div>
+
+          {/* Table Filter */}
+          <div className="relative">
+            <select aria-label="Filter by table" className="w-full bg-app text-primary rounded-full px-6 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 appearance-none shadow-sm cursor-pointer" value={filterTable} onChange={e => setFilterTable(e.target.value)}>
               <option value="">All Tables</option>
               <option value="account">Accounts</option>
               <option value="loan">Loans</option>
               <option value="transaction">Transactions</option>
             </select>
-            <option value="account">Accounts</option>
-            <option value="loan">Loans</option>
-            <option value="transaction">Transactions</option>
-          </select>
-          <div className="flex items-center gap-3 flex-1">
-            <label htmlFor="audit-date-from" className="text-[12px] font-medium text-secondary uppercase tracking-wide whitespace-nowrap">From</label>
-            <input id="audit-date-from" type="date" className="flex-1 bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 shadow-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
           </div>
-          <div className="flex items-center gap-3 flex-1">
-            <label htmlFor="audit-date-to" className="text-[12px] font-medium text-secondary uppercase tracking-wide whitespace-nowrap">To</label>
-            <input id="audit-date-to" type="date" className="flex-1 bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 shadow-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-          </div>
-          <div className="flex items-center gap-3 flex-1">
-            <label className="text-[12px] font-medium text-secondary uppercase tracking-wide whitespace-nowrap">To</label>
-            <input type="date" className="flex-1 bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 shadow-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+
+          {/* Date Range Row */}
+          <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+            <div className="flex items-center gap-3 bg-app/50 p-2 px-4 rounded-full border border-black/5">
+              <label htmlFor="audit-date-from" className="text-[11px] font-bold text-secondary uppercase tracking-widest whitespace-nowrap opacity-60">From</label>
+              <input id="audit-date-from" type="date" className="flex-1 bg-transparent text-primary text-sm focus:outline-none" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-3 bg-app/50 p-2 px-4 rounded-full border border-black/5">
+              <label htmlFor="audit-date-to" className="text-[11px] font-bold text-secondary uppercase tracking-widest whitespace-nowrap opacity-60">To</label>
+              <input id="audit-date-to" type="date" className="flex-1 bg-transparent text-primary text-sm focus:outline-none" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            </div>
           </div>
         </div>
 
         {loading ? (
           <div className="flex flex-col gap-3 animate-pulse">
-            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 bg-app rounded-2xl" />)}
+            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 bg-app rounded-2xl"></div>)}
           </div>
         ) : (
           <div className="overflow-x-auto">

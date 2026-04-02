@@ -5,7 +5,8 @@ export default function AuthLayout() {
   const { user } = useAuth();
 
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    if (user.role === 'customer') return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   return (

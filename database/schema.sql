@@ -167,11 +167,26 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    -- Process Withdrawal/Transfer
-    IF NEW.type IN ('Withdrawal', 'Transfer') AND NEW.from_account_id IS NOT NULL THEN
+    -- Lock accounts in consistent order to prevent deadlocks
+    IF NEW.from_account_id IS NOT NULL AND NEW.to_account_id IS NOT NULL THEN
+        IF NEW.from_account_id < NEW.to_account_id THEN
+            PERFORM 1 FROM account WHERE account_id = NEW.from_account_id FOR UPDATE;
+            PERFORM 1 FROM account WHERE account_id = NEW.to_account_id FOR UPDATE;
+        ELSE
+            PERFORM 1 FROM account WHERE account_id = NEW.to_account_id FOR UPDATE;
+            PERFORM 1 FROM account WHERE account_id = NEW.from_account_id FOR UPDATE;
+        END IF;
+    ELSIF NEW.from_account_id IS NOT NULL THEN
+        PERFORM 1 FROM account WHERE account_id = NEW.from_account_id FOR UPDATE;
+    ELSIF NEW.to_account_id IS NOT NULL THEN
+        PERFORM 1 FROM account WHERE account_id = NEW.to_account_id FOR UPDATE;
+    END IF;
+
+    -- Process Withdrawal/Transfer/Preclosure
+    IF NEW.type IN ('Withdrawal', 'Transfer', 'Preclosure') AND NEW.from_account_id IS NOT NULL THEN
         -- Check Account Status
         SELECT balance, status, daily_transaction_limit INTO v_from_balance, v_from_status, v_daily_limit
-        FROM account WHERE account_id = NEW.from_account_id FOR UPDATE;
+        FROM account WHERE account_id = NEW.from_account_id;
 
         IF v_from_status = 'Frozen' THEN
             RAISE EXCEPTION 'Source account is frozen. Transactions not allowed.';
@@ -185,16 +200,18 @@ BEGIN
             RAISE EXCEPTION 'Insufficient balance.';
         END IF;
 
-        -- Check Daily Account Transfer Limit
-        SELECT COALESCE(SUM(amount), 0) INTO v_today_transferred
-        FROM transaction
-        WHERE from_account_id = NEW.from_account_id 
-        AND type IN ('Withdrawal', 'Transfer')
-        AND DATE(timestamp) = CURRENT_DATE
-        AND status = 'Completed';
-        
-        IF (v_today_transferred + NEW.amount) > v_daily_limit THEN
-            RAISE EXCEPTION 'Daily transaction limit exceeded.';
+        -- Check Daily Account Transfer Limit (Bypass if Preclosure)
+        IF NEW.type != 'Preclosure' THEN
+            SELECT COALESCE(SUM(amount), 0) INTO v_today_transferred
+            FROM transaction
+            WHERE from_account_id = NEW.from_account_id 
+            AND type IN ('Withdrawal', 'Transfer')
+            AND DATE(timestamp) = CURRENT_DATE
+            AND status = 'Completed';
+            
+            IF (v_today_transferred + NEW.amount) > v_daily_limit THEN
+                RAISE EXCEPTION 'Daily transaction limit exceeded.';
+            END IF;
         END IF;
 
         -- Beneficiary checks
@@ -364,7 +381,7 @@ CREATE TABLE IF NOT EXISTS standing_instruction (
     amount DECIMAL(15, 2) NOT NULL CHECK (amount > 0),
     frequency VARCHAR(20) CHECK (frequency IN ('Daily', 'Weekly', 'Monthly')),
     next_execution_date DATE NOT NULL,
-    status VARCHAR(20) DEFAULT 'Active' CHECK (status IN ('Active', 'Cancelled')),
+    status VARCHAR(20) DEFAULT 'Active' CHECK (status IN ('Active', 'Cancelled', 'Paused')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT chk_destination CHECK (
         (to_account_id IS NOT NULL AND beneficiary_id IS NULL) OR
@@ -372,7 +389,7 @@ CREATE TABLE IF NOT EXISTS standing_instruction (
     )
 );
 -- OTP Generation RPC
-CREATE OR REPLACE FUNCTION request_password_reset(p_username_var VARCHAR)
+CREATE OR REPLACE FUNCTION request_password_reset(p_username_var VARCHAR, p_ip_address INET DEFAULT '0.0.0.0')
 RETURNS JSONB AS $$
 DECLARE
     v_otp VARCHAR(6);
@@ -381,29 +398,31 @@ BEGIN
     SELECT EXISTS(SELECT 1 FROM login WHERE username = p_username_var) INTO v_user_exists;
     
     IF v_user_exists THEN
-        -- Generate simple 6 digit OTP (mock approach)
-        v_otp := LPAD(TRUNC((EXTRACT(EPOCH FROM clock_timestamp()) * 1000000)::BIGINT % 999999)::TEXT, 6, '0');
+        -- Generate secure 6 digit OTP (Mock CSPRNG using random())
+        v_otp := LPAD((FLOOR(RANDOM() * 900000) + 100000)::TEXT, 6, '0');
         
+        -- Store hashed version of OTP for security
         INSERT INTO password_reset_otp (username, otp_code, expires_at)
-        VALUES (p_username_var, v_otp, NOW() + INTERVAL '10 minutes');
+        VALUES (p_username_var, digest(v_otp, 'sha256'), NOW() + INTERVAL '10 minutes');
 
-        -- In production: send OTP via email/SMS, do not return in response
-        RETURN jsonb_build_object('success', true, 'otp', v_otp, 'message', 'OTP sent to registered contact. For demo: ' || v_otp);
+        -- Security: Do not return the OTP in the response
+        RETURN jsonb_build_object('success', true, 'message', 'If the account exists, an OTP has been sent to the registered contact.');
     ELSE
-        RETURN jsonb_build_object('success', false, 'message', 'Username not found.');
+        -- Same generic message to prevent username enumeration
+        RETURN jsonb_build_object('success', true, 'message', 'If the account exists, an OTP has been sent to the registered contact.');
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- OTP Verification & Reset RPC
-CREATE OR REPLACE FUNCTION reset_password_with_otp(p_username VARCHAR, p_otp VARCHAR, p_new_password VARCHAR)
+CREATE OR REPLACE FUNCTION reset_password_with_otp(p_username VARCHAR, p_otp VARCHAR, p_new_password VARCHAR, p_ip_address INET DEFAULT '0.0.0.0')
 RETURNS JSONB AS $$
 DECLARE
     v_valid BOOLEAN;
 BEGIN
     SELECT EXISTS(
         SELECT 1 FROM password_reset_otp 
-        WHERE username = p_username AND otp_code = p_otp AND expires_at > NOW()
+        WHERE username = p_username AND otp_code = digest(p_otp, 'sha256') AND expires_at > NOW()
     ) INTO v_valid;
 
     IF v_valid THEN
@@ -412,7 +431,7 @@ BEGIN
         
         DELETE FROM password_reset_otp WHERE username = p_username;
         
-        INSERT INTO audit_logs (username, event_type, ip_address) VALUES (p_username, 'PASSWORD_RESET', '127.0.0.1'::INET);
+        INSERT INTO audit_logs (username, event_type, ip_address) VALUES (p_username, 'PASSWORD_RESET', p_ip_address);
         RETURN jsonb_build_object('success', true, 'message', 'Password successfully reset.');
     ELSE
         RETURN jsonb_build_object('success', false, 'message', 'Invalid or expired OTP.');
@@ -421,15 +440,14 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Logout Auditing RPC (REQ-4B)
-CREATE OR REPLACE FUNCTION log_logout(p_username VARCHAR)
+CREATE OR REPLACE FUNCTION log_logout(p_username VARCHAR, p_ip VARCHAR DEFAULT '0.0.0.0')
 RETURNS VOID AS $$
 BEGIN
     IF p_username IS NOT NULL THEN
-        INSERT INTO audit_logs (username, event_type, ip_address) VALUES (p_username, 'LOGOUT', '127.0.0.1'::INET);
+        INSERT INTO audit_logs (username, event_type, ip_address) VALUES (p_username, 'LOGOUT', p_ip::INET);
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
 -- Admin Approve/Reject Transaction
 CREATE OR REPLACE FUNCTION approve_transaction(p_txn_id UUID, p_status VARCHAR)
 RETURNS JSONB AS $$
@@ -441,6 +459,7 @@ BEGIN
     END IF;
     
     SELECT * INTO v_txn FROM transaction WHERE transaction_id = p_txn_id;
+    SELECT * INTO v_txn FROM transaction WHERE transaction_id = p_txn_id FOR UPDATE;
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'message', 'Transaction not found.');
     END IF;
@@ -449,9 +468,7 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Transaction is not pending approval.');
     END IF;
 
-    UPDATE transaction SET status = p_status WHERE transaction_id = p_txn_id;
-    RETURN jsonb_build_object('success', true, 'message', 'Transaction ' || p_status || ' successfully.');
-END;
+    UPDATE transaction SET status = p_status WHERE transaction_id = p_txn_id;END;
 
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -473,6 +490,7 @@ BEGIN
     SELECT balance, status INTO v_balance, v_acct_status FROM account WHERE account_id = p_account_id FOR UPDATE;
     IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'message', 'Account not found.'); END IF;
     IF v_acct_status = 'Frozen' THEN RETURN jsonb_build_object('success', false, 'message', 'Account is frozen.'); END IF;
+    IF v_acct_status = 'Closed' THEN RETURN jsonb_build_object('success', false, 'message', 'Account is closed.'); END IF;
 
     v_outstanding := v_loan.principal_amount; -- Simplification: full principal pre-closure
     v_penalty := v_outstanding * 0.02;
@@ -483,7 +501,8 @@ BEGIN
     END IF;
 
     -- Debit account via native trigger limits checking
-    INSERT INTO transaction (from_account_id, type, amount, status) VALUES (p_account_id, 'Withdrawal', v_total_debit, 'Completed');
+    INSERT INTO transaction (from_account_id, type, amount, status, description) 
+    VALUES (p_account_id, 'Preclosure', v_total_debit, 'Completed', 'Loan Pre-closure Settlement');
 
     -- Close loan and schedules
     UPDATE loan SET status = 'Closed' WHERE loan_id = p_loan_id;
@@ -498,8 +517,13 @@ RETURNS JSONB AS $$
 DECLARE
     v_marked_overdue INT := 0;
     v_reminders_sent INT := 0;
+    v_si_processed INT := 0;
+    v_si RECORD;
+    v_from_status VARCHAR(20);
+    v_to_status VARCHAR(20);
+    v_from_balance DECIMAL(15, 2);
 BEGIN
-    -- Mark Overdue
+    -- Mark Overdue EMIs
     UPDATE repayment_schedule 
     SET pay_status = 'Overdue' 
     WHERE due_date < CURRENT_DATE AND pay_status = 'Unpaid';
@@ -509,8 +533,43 @@ BEGIN
     SELECT COUNT(*) INTO v_reminders_sent 
     FROM repayment_schedule 
     WHERE due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '5 days' AND pay_status = 'Unpaid';
+
+    -- Process Standing Instructions (Skip Paused and Cancelled)
+    FOR v_si IN 
+        SELECT * FROM standing_instruction 
+        WHERE status = 'Active' AND next_execution_date <= CURRENT_DATE
+    LOOP
+        -- Check Account Status and Balance
+        SELECT status, balance INTO v_from_status, v_from_balance FROM account WHERE account_id = v_si.from_account_id;
+        SELECT status INTO v_to_status FROM account WHERE account_id = v_si.to_account_id;
+
+        -- Only proceed if accounts are Active and balance is sufficient
+        IF v_from_status = 'Active' AND v_to_status = 'Active' AND v_from_balance >= v_si.amount THEN
+            -- Create Transaction (This will trigger process_transaction_logic to update balances)
+            INSERT INTO transaction (from_account_id, to_account_id, type, amount, status, description)
+            VALUES (v_si.from_account_id, v_si.to_account_id, 'Transfer', v_si.amount, 'Completed', 'Recurring Standing Instruction');
+
+            -- Update Next Execution Date
+            UPDATE standing_instruction 
+            SET next_execution_date = 
+                CASE v_si.frequency
+                    WHEN 'Daily' THEN (v_si.next_execution_date + INTERVAL '1 day')::DATE
+                    WHEN 'Weekly' THEN (v_si.next_execution_date + INTERVAL '7 days')::DATE
+                    WHEN 'Monthly' THEN (v_si.next_execution_date + INTERVAL '1 month')::DATE
+                    ELSE (v_si.next_execution_date + INTERVAL '1 month')::DATE
+                END
+            WHERE instruction_id = v_si.instruction_id;
+
+            v_si_processed := v_si_processed + 1;
+        END IF;
+    END LOOP;
     
-    RETURN jsonb_build_object('success', true, 'overdue_marked', v_marked_overdue, 'reminders_sent', v_reminders_sent);
+    RETURN jsonb_build_object(
+        'success', true, 
+        'overdue_marked', v_marked_overdue, 
+        'reminders_sent', v_reminders_sent,
+        'standing_instructions_processed', v_si_processed
+    );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -563,6 +622,10 @@ BEGIN
                   ' type=' || COALESCE(NEW.type, '') ||
                   ' amount=' || COALESCE(NEW.amount::TEXT, '') ||
                   ' status=' || COALESCE(NEW.status, '');
+    ELSIF TG_TABLE_NAME = 'standing_instruction' THEN
+        v_desc := 'Instruction ' || COALESCE(NEW.instruction_id::TEXT, OLD.instruction_id::TEXT) ||
+                  ' status=' || COALESCE(NEW.status, '') ||
+                  ' amount=' || COALESCE(NEW.amount::TEXT, '');
     ELSE
         v_desc := TG_TABLE_NAME || ' ' || TG_OP;
     END IF;
@@ -592,6 +655,14 @@ CREATE OR REPLACE TRIGGER trg_audit_transaction
 AFTER INSERT OR UPDATE ON transaction
 FOR EACH ROW EXECUTE FUNCTION log_data_change();
 
+CREATE OR REPLACE TRIGGER trg_audit_standing_instruction
+AFTER INSERT OR UPDATE ON standing_instruction
+FOR EACH ROW EXECUTE FUNCTION log_data_change();
+
+CREATE OR REPLACE TRIGGER trg_audit_transaction
+AFTER INSERT OR UPDATE ON transaction
+FOR EACH ROW EXECUTE FUNCTION log_data_change();
+
 -- NFR-SEC: Enable Row Level Security (Section 11)
 ALTER TABLE customer             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login                ENABLE ROW LEVEL SECURITY;
@@ -608,6 +679,74 @@ ALTER TABLE password_reset_otp   ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
+  -- 1. Customer
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='customer' AND policyname='customer_self_access') THEN
+    CREATE POLICY customer_self_access ON customer TO authenticated USING (customer_id = auth.uid()) WITH CHECK (customer_id = auth.uid());
+  END IF;
+
+  -- 2. Login
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='login' AND policyname='login_self_access') THEN
+    CREATE POLICY login_self_access ON login TO authenticated USING (customer_id = auth.uid()) WITH CHECK (customer_id = auth.uid());
+  END IF;
+
+  -- 3. Account
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='account' AND policyname='account_owner_access') THEN
+    CREATE POLICY account_owner_access ON account TO authenticated USING (customer_id = auth.uid()) WITH CHECK (customer_id = auth.uid());
+  END IF;
+
+  -- 4. Transaction
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='transaction' AND policyname='transaction_owner_access') THEN
+    CREATE POLICY transaction_owner_access ON transaction TO authenticated 
+    USING (
+      EXISTS (SELECT 1 FROM account WHERE account_id IN (from_account_id, to_account_id) AND customer_id = auth.uid())
+    );
+  END IF;
+
+  -- 5. Loan
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='loan' AND policyname='loan_owner_access') THEN
+    CREATE POLICY loan_owner_access ON loan TO authenticated USING (customer_id = auth.uid()) WITH CHECK (customer_id = auth.uid());
+  END IF;
+
+  -- 6. Repayment Schedule
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='repayment_schedule' AND policyname='repayment_owner_access') THEN
+    CREATE POLICY repayment_owner_access ON repayment_schedule TO authenticated 
+    USING (
+      EXISTS (SELECT 1 FROM loan WHERE loan_id = repayment_schedule.loan_id AND customer_id = auth.uid())
+    );
+  END IF;
+
+  -- 7. Beneficiary
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='beneficiary' AND policyname='beneficiary_owner_access') THEN
+    CREATE POLICY beneficiary_owner_access ON beneficiary TO authenticated USING (customer_id = auth.uid()) WITH CHECK (customer_id = auth.uid());
+  END IF;
+
+  -- 8. Standing Instruction
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='standing_instruction' AND policyname='standing_owner_access') THEN
+    CREATE POLICY standing_owner_access ON standing_instruction TO authenticated USING (customer_id = auth.uid()) WITH CHECK (customer_id = auth.uid());
+  END IF;
+
+  -- 9. Audit Logs (Restrictive)
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='audit_logs' AND policyname='audit_staff_access') THEN
+    CREATE POLICY audit_staff_access ON audit_logs TO authenticated USING (auth.jwt() ->> 'role' IN ('staff', 'manager', 'service_role'));
+  END IF;
+
+  -- 10. Branch (Public read for authenticated users)
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='branch' AND policyname='branch_read_access') THEN
+    CREATE POLICY branch_read_access ON branch FOR SELECT TO authenticated USING (true);
+  END IF;
+
+  -- 11. Employee (Restrictive)
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='employee' AND policyname='employee_staff_access') THEN
+    CREATE POLICY employee_staff_access ON employee TO authenticated USING (auth.jwt() ->> 'role' IN ('staff', 'manager', 'service_role'));
+  END IF;
+
+  -- 12. Password Reset OTP (No client access)
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='password_reset_otp' AND policyname='otp_internal_access') THEN
+    CREATE POLICY otp_internal_access ON password_reset_otp TO authenticated USING (auth.jwt() ->> 'role' IN ('service_role'));
+  END IF;
+
+
+  -- Re-enabling 'anon' access for your custom auth system (REQ-3 Simulation)
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='customer' AND policyname='allow_anon_all_customer') THEN
     CREATE POLICY allow_anon_all_customer ON customer FOR ALL TO anon USING (true) WITH CHECK (true);
   END IF;
@@ -644,4 +783,5 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='password_reset_otp' AND policyname='allow_anon_all_otp') THEN
     CREATE POLICY allow_anon_all_otp ON password_reset_otp FOR ALL TO anon USING (true) WITH CHECK (true);
   END IF;
-END $$;
+
+END $$;

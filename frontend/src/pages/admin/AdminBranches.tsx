@@ -78,6 +78,11 @@ export default function AdminBranches() {
           </button>
 
           <h3 className="text-xl font-medium text-primary mb-6 flex items-center gap-2">
+            <Building size={24} className="text-secondary" />
+            {editId ? 'Edit Branch Details' : 'Register New Branch'}
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
               <label htmlFor="branch-name" className="text-[13px] font-medium text-primary px-2">Branch Name</label>
               <input id="branch-name" type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" value={form.branch_name} onChange={e => setForm({ ...form, branch_name: e.target.value })} placeholder="e.g. South Mumbai Branch" />
@@ -90,11 +95,6 @@ export default function AdminBranches() {
               <label htmlFor="address" className="text-[13px] font-medium text-primary px-2">Full Address</label>
               <input id="address" type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="e.g. 123 Banking Street, Mumbai" />
             </div>
-            </div>
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-[13px] font-medium text-primary px-2">Full Address</label>
-              <input type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="e.g. 123 Banking Street, Mumbai" />
-            </div>
           </div>
 
           <div className="mt-8 flex justify-end">
@@ -102,68 +102,67 @@ export default function AdminBranches() {
               <Save size={18} /> {editId ? 'Update Branch' : 'Save Branch'}
             </button>
           </div>
-        </div >
-      )
-}
+        </div>
+      )}
 
-{/* Main List Box */ }
-<div className="bg-card rounded-[40px] p-6 md:p-10 shadow-sm min-h-[500px]">
+      {/* Main List Box */}
+      <div className="bg-card rounded-[40px] p-6 md:p-10 shadow-sm min-h-[500px]">
 
-  {/* Toolbar */}
-  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-    <div className="relative flex-1 max-w-lg">
-      <Search size={18} className="absolute top-1/2 left-5 -translate-y-1/2 text-secondary" />
-      <input type="text" className="w-full bg-app text-primary rounded-full pl-12 pr-6 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 transition-all shadow-sm" placeholder="Search branches..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-    </div>
-    <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-accent-teal/10 text-accent-teal tracking-wide shadow-sm whitespace-nowrap">
-      {branches.length} branches
-    </span>
-  </div>
+        {/* Toolbar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div className="relative flex-1 max-w-lg">
+            <Search size={18} className="absolute top-1/2 left-5 -translate-y-1/2 text-secondary" />
+            <input type="text" className="w-full bg-app text-primary rounded-full pl-12 pr-6 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 transition-all shadow-sm" placeholder="Search branches..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          </div>
+          <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-accent-teal/10 text-accent-teal tracking-wide shadow-sm whitespace-nowrap">
+            {branches.length} branches
+          </span>
+        </div>
 
-  {loading ? (
-    <div className="flex flex-col gap-3 animate-pulse">
-      {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-app rounded-2xl" />)}
-    </div>
-  ) : (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-app">
-            <th className="pb-4 text-[11px] tracking-wider uppercase font-semibold text-secondary px-2">Branch Name</th>
-            <th className="pb-4 text-[11px] tracking-wider uppercase font-semibold text-secondary px-2">Address</th>
-            <th className="pb-4 text-[11px] tracking-wider uppercase font-semibold text-secondary px-2">Pincode</th>
-            <th className="pb-4 px-2"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-app">
-          {filtered.map(b => (
-            <tr key={b.branch_id} className="hover:bg-app/30 transition-colors">
-              <td className="py-4 px-2 font-medium text-[14px] text-primary whitespace-nowrap">{b.branch_name}</td>
-              <td className="py-4 px-2 text-[14px] text-secondary">{b.address}</td>
-              <td className="py-4 px-2 text-[14px] font-mono tracking-wide text-secondary">{b.pincode}</td>
-              <td className="py-4 px-2 text-right">
-                {user?.role === 'admin' ? (
-                  <button className="px-4 py-1.5 rounded-full text-[12px] font-medium bg-app text-secondary hover:text-primary hover:shadow-sm transition-all" onClick={() => startEdit(b)}>
-                    Edit
-                  </button>
-                ) : (
-                  <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-secondary/10 text-secondary tracking-wide">View Only</span>
+        {loading ? (
+          <div className="flex flex-col gap-3 animate-pulse">
+            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-app rounded-2xl" />)}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-app">
+                  <th className="pb-4 text-[11px] tracking-wider uppercase font-semibold text-secondary px-2">Branch Name</th>
+                  <th className="pb-4 text-[11px] tracking-wider uppercase font-semibold text-secondary px-2">Address</th>
+                  <th className="pb-4 text-[11px] tracking-wider uppercase font-semibold text-secondary px-2">Pincode</th>
+                  <th className="pb-4 px-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-app">
+                {filtered.map(b => (
+                  <tr key={b.branch_id} className="hover:bg-app/30 transition-colors">
+                    <td className="py-4 px-2 font-medium text-[14px] text-primary whitespace-nowrap">{b.branch_name}</td>
+                    <td className="py-4 px-2 text-[14px] text-secondary">{b.address}</td>
+                    <td className="py-4 px-2 text-[14px] font-mono tracking-wide text-secondary">{b.pincode}</td>
+                    <td className="py-4 px-2 text-right">
+                      {user?.role === 'admin' ? (
+                        <button className="px-4 py-1.5 rounded-full text-[12px] font-medium bg-app text-secondary hover:text-primary hover:shadow-sm transition-all" onClick={() => startEdit(b)}>
+                          Edit
+                        </button>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-secondary/10 text-secondary tracking-wide">View Only</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="text-center text-secondary py-16">
+                      {searchTerm ? 'No branches match your search.' : 'No branches registered.'}
+                    </td>
+                  </tr>
                 )}
-              </td>
-            </tr>
-          ))}
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={4} className="text-center text-secondary py-16">
-                {searchTerm ? 'No branches match your search.' : 'No branches registered.'}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
-  )}
-</div>
-    </div >
   );
 }

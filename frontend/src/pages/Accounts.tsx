@@ -51,6 +51,7 @@ export default function Accounts() {
     frequency: 'Monthly',
     nextDate: ''
   });
+  const [editingInstructionId, setEditingInstructionId] = useState<string | null>(null);
 
   useEffect(() => {
     loadAccounts();
@@ -116,24 +117,62 @@ export default function Accounts() {
     }
 
     try {
-      const { error } = await supabase.from('standing_instruction').insert([{
+      const payload = {
         customer_id: customerId,
         from_account_id: instForm.fromAccountId,
         to_account_id: instForm.toAccountId,
         amount: parseFloat(instForm.amount),
         frequency: instForm.frequency,
         next_execution_date: instForm.nextDate
-      }]);
+      };
 
-      if (error) throw error;
-      setInstMsg({ text: 'Standing instruction successfully created.', type: 'success' });
+      if (editingInstructionId) {
+        const { error } = await supabase.from('standing_instruction').update(payload).eq('instruction_id', editingInstructionId);
+        if (error) throw error;
+        setInstMsg({ text: 'Standing instruction successfully updated.', type: 'success' });
+      } else {
+        const { error } = await supabase.from('standing_instruction').insert([payload]);
+        if (error) throw error;
+        setInstMsg({ text: 'Standing instruction successfully created.', type: 'success' });
+      }
+
       setInstForm({ fromAccountId: '', toAccountId: '', amount: '', frequency: 'Monthly', nextDate: '' });
+      setEditingInstructionId(null);
       loadInstructions();
     } catch (err: any) {
       setInstMsg({ text: err.message, type: 'danger' });
     } finally {
       setInstLoading(false);
     }
+  };
+
+  const togglePauseInstruction = async (id: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'Paused' ? 'Active' : 'Paused';
+      const { error } = await supabase.from('standing_instruction').update({ status: newStatus }).eq('instruction_id', id);
+      if (error) throw error;
+      loadInstructions();
+    } catch (err: any) {
+      setInstMsg({ text: `Failed to update status: ${err.message}`, type: 'danger' });
+    }
+  };
+
+  const startEditing = (inst: any) => {
+    setEditingInstructionId(inst.instruction_id);
+    setInstForm({
+      fromAccountId: inst.from_account_id,
+      toAccountId: inst.to_account_id,
+      amount: inst.amount.toString(),
+      frequency: inst.frequency,
+      nextDate: inst.next_execution_date
+    });
+    // Scroll to form for better UX
+    document.getElementById('instruction-form')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const cancelEditing = () => {
+    setEditingInstructionId(null);
+    setInstForm({ fromAccountId: '', toAccountId: '', amount: '', frequency: 'Monthly', nextDate: '' });
   };
 
   const cancelInstruction = async (id: string) => {
@@ -441,7 +480,7 @@ export default function Accounts() {
             
             {/* Left Side: Create Form */}
             <div className="flex-1 space-y-4">
-              <h2 className="text-xl font-semibold text-primary mb-6">Setup Recurring Transfer</h2>
+              <h2 className="text-xl font-semibold text-primary mb-6" id="instruction-form">{editingInstructionId ? 'Modify Recurring Transfer' : 'Setup Recurring Transfer'}</h2>
               
               {instMsg.text && (
                 <div className={`p-4 rounded-xl flex items-center gap-3 text-sm font-medium ${instMsg.type === 'success' ? 'bg-accent-teal/10 text-accent-teal' : 'bg-accent-rose/10 text-accent-rose'}`}>
@@ -516,13 +555,24 @@ export default function Accounts() {
                   </div>
                 </div>
 
-                <button 
-                  type="submit" 
-                  disabled={!!(instLoading || (instForm.fromAccountId && accounts.find(a => a.account_id === instForm.fromAccountId)?.status !== 'Active') || (instForm.toAccountId && accounts.find(a => a.account_id === instForm.toAccountId)?.status !== 'Active'))}
-                  className="w-full bg-secondary text-white font-medium py-3 rounded-full mt-2 hover:bg-[#6c5e6a] transition-all disabled:opacity-60 flex justify-center items-center gap-2"
-                >
-                  <Repeat size={18} /> {instLoading ? 'Saving...' : (instForm.fromAccountId && accounts.find(a => a.account_id === instForm.fromAccountId)?.status !== 'Active') || (instForm.toAccountId && accounts.find(a => a.account_id === instForm.toAccountId)?.status !== 'Active') ? 'Cannot Set Instruction (Account Not Active)' : 'Set Standing Instruction'}
-                </button>
+                <div className="flex gap-4">
+                  <button 
+                    type="submit" 
+                    disabled={!!(instLoading || (instForm.fromAccountId && accounts.find(a => a.account_id === instForm.fromAccountId)?.status !== 'Active') || (instForm.toAccountId && accounts.find(a => a.account_id === instForm.toAccountId)?.status !== 'Active'))}
+                    className="flex-1 bg-secondary text-white font-medium py-3 rounded-full mt-2 hover:bg-[#6c5e6a] transition-all disabled:opacity-60 flex justify-center items-center gap-2"
+                  >
+                    <Repeat size={18} /> {instLoading ? 'Saving...' : (instForm.fromAccountId && accounts.find(a => a.account_id === instForm.fromAccountId)?.status !== 'Active') || (instForm.toAccountId && accounts.find(a => a.account_id === instForm.toAccountId)?.status !== 'Active') ? 'Cannot Set Instruction (Account Not Active)' : (editingInstructionId ? 'Update Instruction' : 'Set Standing Instruction')}
+                  </button>
+                  {editingInstructionId && (
+                    <button 
+                      type="button" 
+                      onClick={cancelEditing}
+                      className="px-6 bg-app text-primary font-medium py-3 rounded-full mt-2 hover:bg-black/5 transition-all"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
             </div>
 
@@ -543,7 +593,7 @@ export default function Accounts() {
                           <p className="text-sm font-medium text-primary">₹{currencyFormatter.format(inst.amount)} <span className="text-xs text-secondary font-normal ml-1">({inst.frequency})</span></p>
                           <p className="text-xs text-secondary mt-1">Next Run: {formatDate(inst.next_execution_date)}</p>
                         </div>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${inst.status === 'Active' ? 'bg-accent-teal/10 text-accent-teal' : 'bg-secondary/10 text-secondary'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${inst.status === 'Active' ? 'bg-accent-teal/10 text-accent-teal' : inst.status === 'Paused' ? 'bg-amber-100 text-amber-700' : 'bg-secondary/10 text-secondary'}`}>
                           {inst.status}
                         </span>
                       </div>
@@ -551,11 +601,19 @@ export default function Accounts() {
                         <span>From: <span className="text-primary font-mono">{inst.from?.account_number}</span></span>
                         <span>To: <span className="text-primary font-mono">{inst.to?.account_number}</span></span>
                       </div>
-                      {inst.status === 'Active' && (
-                         <div className="flex justify-end">
+                      <div className="flex justify-end gap-3 items-center">
+                        {inst.status !== 'Cancelled' && (
+                          <>
+                            <button onClick={() => startEditing(inst)} className="text-[11px] text-primary hover:underline font-medium">Edit</button>
+                            <button onClick={() => togglePauseInstruction(inst.instruction_id, inst.status)} className="text-[11px] text-accent-teal hover:underline font-medium">
+                              {inst.status === 'Paused' ? 'Resume' : 'Pause'}
+                            </button>
+                          </>
+                        )}
+                        {inst.status === 'Active' && (
                            <button onClick={() => cancelInstruction(inst.instruction_id)} className="text-[11px] text-accent-rose hover:underline font-medium">Cancel Schedule</button>
-                         </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
