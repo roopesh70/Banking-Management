@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { FileText, Calendar, Calculator, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, Clock, Landmark, X } from 'lucide-react';
@@ -21,6 +21,14 @@ export default function Loans() {
   const [preCloseLoan, setPreCloseLoan] = useState<any | null>(null);
   const [selectedAccId, setSelectedAccId] = useState('');
   const [isPreclosing, setIsPreclosing] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  // Clear any pending timeout on unmount to prevent setState after unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const rateMap: Record<string, number> = { Personal: 12.5, Home: 8.5, Auto: 9.5, Education: 7.5 };
 
@@ -111,7 +119,8 @@ export default function Loans() {
       setClosureMsg({ text: err.message, type: 'danger' });
     } finally {
       setIsPreclosing(false);
-      setTimeout(() => setClosureMsg({ text: '', type: '' }), 6000);
+      if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = window.setTimeout(() => setClosureMsg({ text: '', type: '' }), 6000);
     }
   };
 
@@ -200,7 +209,7 @@ export default function Loans() {
 
           {closureMsg.text && (
             <div className={`p-4 rounded-2xl flex items-center gap-3 text-sm font-medium animate-in slide-in-from-top-2 focus:outline-none ${closureMsg.type === 'success' ? 'bg-accent-teal/10 text-accent-teal border border-accent-teal/20' : 'bg-accent-rose/10 text-accent-rose border border-accent-rose/20'}`}>
-              <CheckCircle2 size={20} /> {closureMsg.text}
+              {closureMsg.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />} {closureMsg.text}
             </div>
           )}
           {loans.length === 0 ? (
@@ -308,20 +317,33 @@ export default function Loans() {
             <p className="text-sm text-secondary mb-6">Settle your debt early! A standard 2% pre-closure penalty will be applied to the remaining principal.</p>
 
             <form onSubmit={confirmPreClose} className="space-y-4">
-              <div className="bg-app rounded-2xl p-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-secondary">Outstanding Principal</span>
-                  <span className="text-primary font-mono medium">₹{fmtD(preCloseLoan.principal_amount)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-secondary">Pre-Closure Penalty (2%)</span>
-                  <span className="text-accent-rose font-mono">₹{fmtD(preCloseLoan.principal_amount * 0.02)}</span>
-                </div>
-                <div className="pt-3 border-t border-secondary/10 flex justify-between font-semibold">
-                  <span className="text-primary tracking-wide">Total Debit Needed</span>
-                  <span className="text-primary font-mono tracking-wider">₹{fmtD(preCloseLoan.principal_amount * 1.02)}</span>
-                </div>
-              </div>
+              {/* Compute remaining principal from unpaid schedule entries */}
+              {(() => {
+                const loanSchedules = schedules.filter(s => s.loan_id === preCloseLoan.loan_id);
+                const remainingPrincipal = loanSchedules.length > 0
+                  ? loanSchedules
+                      .filter(s => s.pay_status !== 'Paid')
+                      .reduce((sum: number, s: any) => sum + Number(s.principal_component ?? 0), 0) || Number(preCloseLoan.principal_amount)
+                  : Number(preCloseLoan.principal_amount);
+                const penalty = remainingPrincipal * 0.02;
+                const totalDebit = remainingPrincipal * 1.02;
+                return (
+                  <div className="bg-app rounded-2xl p-4 space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-secondary">Outstanding Principal</span>
+                      <span className="text-primary font-mono medium">₹{fmtD(remainingPrincipal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-secondary">Pre-Closure Penalty (2%)</span>
+                      <span className="text-accent-rose font-mono">₹{fmtD(penalty)}</span>
+                    </div>
+                    <div className="pt-3 border-t border-secondary/10 flex justify-between font-semibold">
+                      <span className="text-primary tracking-wide">Total Debit Needed</span>
+                      <span className="text-primary font-mono tracking-wider">₹{fmtD(totalDebit)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-1 mt-4">
                 <label className="text-[13px] font-medium text-primary px-2">Funding Account</label>

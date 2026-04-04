@@ -66,7 +66,7 @@ export default function DashboardLayout() {
         </aside>
 
         {/* Mobile bottom nav */}
-        <div className="md:hidden absolute bottom-0 left-0 right-0 bg-app border-t border-card/60 flex justify-around p-3 z-[100]">
+        <div className="md:hidden absolute bottom-0 left-0 right-0 bg-app border-t border-card/60 flex justify-around p-3 z-40">
           {menuItems.map(item => {
             const isActive = location.pathname === item.path;
             return (

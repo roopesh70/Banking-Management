@@ -59,8 +59,13 @@ export default function AdminEmployees() {
   };
 
   const toggleActive = async (id: string, currentStatus: boolean) => {
-    await supabase.from('employee').update({ is_active: !currentStatus }).eq('employee_id', id);
-    loadData();
+    try {
+      const { error } = await supabase.from('employee').update({ is_active: !currentStatus }).eq('employee_id', id);
+      if (error) throw error;
+      loadData();
+    } catch (err: any) {
+      alert(`Failed to update status: ${err.message}`);
+    }
   };
 
   const filtered = employees.filter(e =>

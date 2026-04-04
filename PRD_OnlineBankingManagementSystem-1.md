@@ -189,6 +189,7 @@ Requirements are labeled `REQ-N`. Priority is marked as **[High]**, **[Medium]**
 | REQ-7 (NEW) | System shall allow customers to download a mini-statement of the last 10 transactions in PDF format. | Medium |
 | REQ-7A (NEW) | System shall allow customers to apply for a new savings or current account online by submitting required KYC documents. | Medium |
 | REQ-7B (NEW) | System shall allow customers to set up automatic recurring transfers (standing instructions) on a daily, weekly, or monthly schedule. | Medium |
+| REQ-7B-1 (NEW) | System shall allow customers to view, modify, pause, or cancel active standing instructions. | Medium |
 | REQ-7C (NEW) | System shall allow administrators to freeze or unfreeze a customer account in response to suspicious activity. | High |
 
 ---

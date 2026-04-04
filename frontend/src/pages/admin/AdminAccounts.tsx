@@ -22,7 +22,7 @@ export default function AdminAccounts() {
     setLoading(false);
   }
 
-  useEffect(() => { loadData(); }, [filterStatus]);
+  useEffect(() => { loadData(); }, [filterStatus, user]);
 
   const toggleFreeze = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'Frozen' ? 'Active' : 'Frozen';

@@ -37,13 +37,13 @@ export default function Login() {
 
       if (data && data.success) {
         if (roleType === 'customer') {
-          login({ id: data.customer_id, role: 'customer' });
+          login({ id: data.customer_id, role: 'customer', username });
           navigate('/dashboard');
         } else if (roleType === 'manager') {
-          login({ id: data.user_id, role: 'manager', department: data.department, branch_id: data.branch_id });
+          login({ id: data.user_id, role: 'manager', username, department: data.department, branch_id: data.branch_id });
           navigate('/admin');
         } else if (roleType === 'admin') {
-          login({ id: data.user_id, role: 'admin' });
+          login({ id: data.user_id, role: 'admin', username });
           navigate('/admin');
         }
       } else {

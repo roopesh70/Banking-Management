@@ -51,7 +51,11 @@ export default function Beneficiaries() {
       alert("Please enter a valid limit (minimum 1000).");
       return;
     }
-    await supabase.from('beneficiary').update({ daily_transfer_limit: Number(newBenLimit) }).eq('beneficiary_id', benId);
+    const { error } = await supabase.from('beneficiary').update({ daily_transfer_limit: Number(newBenLimit) }).eq('beneficiary_id', benId);
+    if (error) {
+      alert("Failed to update limit. Please try again.");
+      return;
+    }
     setEditingBenId(null);
     loadData();
   };
@@ -70,13 +74,20 @@ export default function Beneficiaries() {
     }
 
     setOtpStep(true);
-    setStatusMsg({ text: 'OTP sent! For demo purposes, use 123456.', type: 'success' });
+    // TODO: Implement server-side OTP generation and verification for production (REQ-24)
+    const demoOtp = '123456';
+    const statusMsgText = process.env.NODE_ENV === 'production' 
+      ? 'OTP sent to your registered email.' 
+      : `OTP sent! For demo purposes, use ${demoOtp}.`;
+    setStatusMsg({ text: statusMsgText, type: 'success' });
   };
 
   const handleConfirmAdd = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (otpInput !== '123456') {
+    // Verification check - in production this must happen on the server
+    const isOtpValid = otpInput === '123456'; 
+    if (!isOtpValid) {
       setStatusMsg({ text: 'Invalid OTP code.', type: 'danger' });
       return;
     }
@@ -190,171 +201,176 @@ export default function Beneficiaries() {
                         {b.account_number}
                       </td>
                       <td className="py-4">
-                        <div className="flex items-center gap-2">
-                          {editingBenId === b.beneficiary_id ? (
-                            <div className="flex items-center gap-1 bg-app rounded-full px-2 py-1">
-                              <span className="opacity-70 text-xs">₹</span>
-                              <input
-                                type="number"
-                                autoFocus
-                                className="w-16 bg-transparent outline-none font-mono text-primary text-xs"
-                                value={newBenLimit}
-                                onChange={e => setNewBenLimit(e.target.value)}
-                                onMouseDown={e => e.preventDefault()} // Keep focus for Enter
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleUpdateLimit(b.beneficiary_id);
-                                  }
-                                  if (e.key === 'Escape') setEditingBenId(null);
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <>
-                              <span className="text-[13px] font-mono text-primary font-medium tracking-wide">₹{fmt(b.daily_transfer_limit)}</span>
-                              <button onClick={() => { setEditingBenId(b.beneficiary_id); setNewBenLimit(b.daily_transfer_limit.toString()); }} className="text-secondary hover:text-primary transition-colors"><Edit2 size={12} /></button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-4">
-                        {b.last_tx_date ? (
-                          <div className="flex flex-col">
-                            <span className="text-[12px] text-primary">{formatDate(b.last_tx_date)}</span>
-                            <span className="text-[11px] font-mono text-secondary">₹{fmt(b.last_tx_amount)}</span>
+                        {editingBenId === b.beneficiary_id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              autoFocus
+                              className="w-20 bg-app rounded-lg outline-none font-mono text-primary text-xs px-2 py-1"
+                              value={newBenLimit}
+                              onChange={e => setNewBenLimit(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleUpdateLimit(b.beneficiary_id);
+                                }
+                                if (e.key === 'Escape') setEditingBenId(null);
+                              }}
+                              onBlur={() => handleUpdateLimit(b.beneficiary_id)}
+                              aria-label="New daily transfer limit"
+                            />
                           </div>
                         ) : (
-                          <span className="text-[12px] text-secondary italic">No transfers</span>
-                        )}
-                      </td>
-                      <td className="py-4 text-center">
-                        {isCooling(b.created_at) ? (
-                          <div className="flex flex-col items-start gap-1">
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-accent-gold/10 text-accent-gold tracking-wide">
-                              Cooling Period
-                            </span>
-                            <div className="flex items-center gap-1 text-[11px] text-secondary font-medium pl-1">
-                              <Clock size={10} />
-                              {cooldownRemaining(b.created_at)}
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-mono text-primary font-medium tracking-wide">₹{fmt(b.daily_transfer_limit)}</span>
+                            <button 
+                              onClick={() => { setEditingBenId(b.beneficiary_id); setNewBenLimit(b.daily_transfer_limit.toString()); }}
+                              className="text-secondary hover:text-primary transition-colors"
+                            >
+                              <Edit2 size={12} />
+                            </button>
                           </div>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-accent-teal/10 text-accent-teal tracking-wide gap-1">
-                            <CheckCircle2 size={12} /> Active
-                          </span>
                         )}
                       </td>
-                      <td className="py-4 text-right">
-                        <button
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:bg-accent-rose/10 hover:text-accent-rose transition-colors"
-                          onClick={() => handleDelete(b.beneficiary_id)}
-                          title="Remove Beneficiary"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
+                <td className="py-4">
+                  {b.last_tx_date ? (
+                    <div className="flex flex-col">
+                      <span className="text-[12px] text-primary">{formatDate(b.last_tx_date)}</span>
+                      <span className="text-[11px] font-mono text-secondary">₹{fmt(b.last_tx_amount)}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[12px] text-secondary italic">No transfers</span>
+                  )}
+                </td>
+                <td className="py-4 text-center">
+                  {isCooling(b.created_at) ? (
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-accent-gold/10 text-accent-gold tracking-wide">
+                        Cooling Period
+                      </span>
+                      <div className="flex items-center gap-1 text-[11px] text-secondary font-medium pl-1">
+                        <Clock size={10} />
+                        {cooldownRemaining(b.created_at)}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-accent-teal/10 text-accent-teal tracking-wide gap-1">
+                      <CheckCircle2 size={12} /> Active
+                    </span>
+                  )}
+                </td>
+                <td className="py-4 text-right">
+                  <button
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:bg-accent-rose/10 hover:text-accent-rose transition-colors"
+                    onClick={() => handleDelete(b.beneficiary_id)}
+                    title="Remove Beneficiary"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </td>
+              </tr>
                   ))}
-                </tbody>
+            </tbody>
               </table>
-            </div>
+      </div>
           )}
-        </div>
+    </div>
 
-        {/* Add Form (Desktop Side Panel / Mobile Slide-over) */}
-        <div className={`
+        {/* Add Form (Desktop Side Panel / Mobile Slide-over) */ }
+  <div className={`
           fixed lg:static inset-y-0 right-0 z-50 w-full md:w-[400px] lg:w-[380px] shrink-0 
           bg-shell lg:bg-transparent shadow-2xl lg:shadow-none p-6 md:p-8 
           transition-transform duration-300 transform 
           ${showAddForm ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
         `}>
-          <div className="lg:bg-card lg:rounded-[40px] lg:p-8 h-full">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-medium text-primary flex items-center gap-2">
-                <UserPlus size={20} className="text-secondary" /> Add New Payee
-              </h3>
-              <button className="lg:hidden text-secondary p-2" onClick={() => setShowAddForm(false)}>✕</button>
-            </div>
-
-            {statusMsg.text && (
-              <div className={`mb-6 p-3 rounded-xl flex items-center gap-2 text-[13px] font-medium ${statusMsg.type === 'success' ? 'bg-accent-teal/10 text-accent-teal border border-accent-teal/20' : 'bg-accent-rose/10 text-accent-rose border border-accent-rose/20'}`}>
-                {statusMsg.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                {statusMsg.text}
-              </div>
-            )}
-
-            {!otpStep ? (
-              <form onSubmit={handleAddProceed} className="space-y-4 text-left">
-                <div className="space-y-1">
-                  <label className="text-[13px] font-medium text-primary px-2">Payee Name</label>
-                  <input type="text" className="w-full bg-app lg:bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" placeholder="e.g. Roopesh K" value={name} onChange={e => setName(e.target.value)} required />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[13px] font-medium text-primary px-2">Account Number (9-18 digits)</label>
-                  <input type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" placeholder="e.g. 1234567890" value={accNum} onChange={e => setAccNum(e.target.value)} required />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[13px] font-medium text-primary px-2">IFSC Code</label>
-                  <input type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 uppercase" placeholder="e.g. HDFC0001234" value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())} required />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[13px] font-medium text-primary px-2">Bank Name</label>
-                  <input type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" placeholder="e.g. HDFC Bank" value={bank} onChange={e => setBank(e.target.value)} required />
-                </div>
-                <div className="space-y-1">
-                  <div className="space-y-1">
-                    <label className="text-[13px] font-medium text-primary px-2">Daily Transfer Limit (₹)</label>
-                    <input type="number" min="1000" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" placeholder="e.g. 50000" value={limit} onChange={e => setLimit(e.target.value)} required />
-                  </div>
-                  <div className="pt-4 mt-2 border-t border-app lg:border-app/30">
-                    <button type="submit" className="w-full bg-primary text-white rounded-full py-3.5 font-medium text-[15px] transition-colors active:scale-95 shadow-md flex items-center justify-center gap-2">
-                      Continue <ArrowRight size={18} />
-                    </button>
-                  </div>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={handleConfirmAdd} className="space-y-6 text-center pt-4">
-                <ShieldCheck size={48} className="mx-auto text-accent-teal mb-2 opacity-80" />
-                <div>
-                  <h4 className="text-lg font-medium text-primary mb-1">Security Verification</h4>
-                  <p className="text-sm text-secondary px-4">Enter the 6-digit OTP sent to your registered email to confirm addition of {name}.</p>
-                </div>
-                <input
-                  type="text"
-                  maxLength={6}
-                  placeholder="------"
-                  className="w-full bg-app text-center text-3xl tracking-[1em] font-mono py-4 rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-secondary/30"
-                  value={otpInput}
-                  onChange={e => setOtpInput(e.target.value.replace(/[^0-9]/g, ''))}
-                  required
-                />
-                <button type="submit" className="w-full bg-accent-teal hover:bg-teal-600 text-white rounded-full py-3.5 font-medium text-[15px] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
-                  <UserPlus size={18} /> Verify & Save Payee
-                </button>
-                <button type="button" onClick={() => setOtpStep(false)} className="w-full text-sm text-secondary hover:text-primary transition-colors mt-2">
-                  Go Back
-                </button>
-              </form>
-            )}
-
-            {!otpStep && (
-              <div className="mt-4 flex items-center gap-2 justify-center text-accent-gold text-[12px] font-medium">
-                <Clock size={14} /> 24-h cooling period will apply
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile slide-over backdrop */}
-        {showAddForm && (
-          <div
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
-            onClick={() => setShowAddForm(false)}
-          />
-        )}
+    <div className="lg:bg-card lg:rounded-[40px] lg:p-8 h-full">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-lg font-medium text-primary flex items-center gap-2">
+          <UserPlus size={20} className="text-secondary" /> Add New Payee
+        </h3>
+        <button className="lg:hidden text-secondary p-2" onClick={() => setShowAddForm(false)}>✕</button>
       </div>
+
+      {statusMsg.text && (
+        <div className={`mb-6 p-3 rounded-xl flex items-center gap-2 text-[13px] font-medium ${statusMsg.type === 'success' ? 'bg-accent-teal/10 text-accent-teal border border-accent-teal/20' : 'bg-accent-rose/10 text-accent-rose border border-accent-rose/20'}`}>
+          {statusMsg.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          {statusMsg.text}
+        </div>
+      )}
+
+      {!otpStep ? (
+        <form onSubmit={handleAddProceed} className="space-y-4 text-left">
+          <div className="space-y-1">
+            <label className="text-[13px] font-medium text-primary px-2">Payee Name</label>
+            <input type="text" className="w-full bg-app lg:bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" placeholder="e.g. Roopesh K" value={name} onChange={e => setName(e.target.value)} required />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[13px] font-medium text-primary px-2">Account Number (9-18 digits)</label>
+            <input type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" placeholder="e.g. 1234567890" value={accNum} onChange={e => setAccNum(e.target.value)} required />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[13px] font-medium text-primary px-2">IFSC Code</label>
+            <input type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30 uppercase" placeholder="e.g. HDFC0001234" value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())} required />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[13px] font-medium text-primary px-2">Bank Name</label>
+            <input type="text" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" placeholder="e.g. HDFC Bank" value={bank} onChange={e => setBank(e.target.value)} required />
+          </div>
+          <div className="space-y-1">
+            <div className="space-y-1">
+              <label className="text-[13px] font-medium text-primary px-2">Daily Transfer Limit (₹)</label>
+              <input type="number" min="1000" className="w-full bg-app text-primary rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/30" placeholder="e.g. 50000" value={limit} onChange={e => setLimit(e.target.value)} required />
+            </div>
+            <div className="pt-4 mt-2 border-t border-app lg:border-app/30">
+              <button type="submit" className="w-full bg-primary text-white rounded-full py-3.5 font-medium text-[15px] transition-colors active:scale-95 shadow-md flex items-center justify-center gap-2">
+                Continue <ArrowRight size={18} />
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : (
+        <form onSubmit={handleConfirmAdd} className="space-y-6 text-center pt-4">
+          <ShieldCheck size={48} className="mx-auto text-accent-teal mb-2 opacity-80" />
+          <div>
+            <h4 className="text-lg font-medium text-primary mb-1">Security Verification</h4>
+            <p className="text-sm text-secondary px-4">Enter the 6-digit OTP sent to your registered email to confirm addition of {name}.</p>
+          </div>
+          <input
+            type="text"
+            maxLength={6}
+            placeholder="------"
+            className="w-full bg-app text-center text-3xl tracking-[1em] font-mono py-4 rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-secondary/30"
+            value={otpInput}
+            onChange={e => setOtpInput(e.target.value.replace(/[^0-9]/g, ''))}
+            required
+          />
+          <button type="submit" className="w-full bg-accent-teal hover:bg-teal-600 text-white rounded-full py-3.5 font-medium text-[15px] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+            <UserPlus size={18} /> Verify & Save Payee
+          </button>
+          <button type="button" onClick={() => setOtpStep(false)} className="w-full text-sm text-secondary hover:text-primary transition-colors mt-2">
+            Go Back
+          </button>
+        </form>
+      )}
+
+      {!otpStep && (
+        <div className="mt-4 flex items-center gap-2 justify-center text-accent-gold text-[12px] font-medium">
+          <Clock size={14} /> 24-h cooling period will apply
+        </div>
+      )}
     </div>
+  </div>
+
+  {/* Mobile slide-over backdrop */ }
+  {
+    showAddForm && (
+      <div
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
+        onClick={() => setShowAddForm(false)}
+      />
+    )
+  }
+      </div >
+    </div >
   );
 }

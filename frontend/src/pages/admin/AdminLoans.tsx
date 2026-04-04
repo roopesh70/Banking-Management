@@ -9,10 +9,13 @@ export default function AdminLoans() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isCronRunning, setIsCronRunning] = useState(false);
   const [cronMsg, setCronMsg] = useState({ text: '', type: '' });
   const { user } = useAuth();
 
   const runCron = async () => {
+    if (isCronRunning) return;
+    setIsCronRunning(true);
     try {
       setCronMsg({ text: 'Running automated sweeps...', type: 'info' });
       const { data, error } = await supabase.rpc('simulate_cron_engine');
@@ -22,9 +25,11 @@ export default function AdminLoans() {
         type: 'success' 
       });
       loadData();
-      setTimeout(() => setCronMsg({ text: '', type: '' }), 6000);
     } catch (err: any) {
       setCronMsg({ text: `CRON Failed: ${err.message}`, type: 'danger' });
+    } finally {
+      setIsCronRunning(false);
+      setTimeout(() => setCronMsg({ text: '', type: '' }), 6000);
     }
   };
 
@@ -86,15 +91,18 @@ export default function AdminLoans() {
           </select>
 
           {user?.role !== 'staff' && (
-            <button onClick={runCron} className="bg-primary text-white rounded-full px-6 py-3.5 text-sm font-medium hover:bg-[#362e34] transition-colors shadow-sm whitespace-nowrap active:scale-95 flex items-center justify-center gap-2">
-              Force CRON Engine
+            <button onClick={runCron} disabled={isCronRunning} className="bg-primary text-white rounded-full px-6 py-3.5 text-sm font-medium hover:bg-[#362e34] transition-colors shadow-sm whitespace-nowrap active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60">
+              {isCronRunning ? 'Engine Running...' : 'Force CRON Engine'}
             </button>
           )}
         </div>
 
         {cronMsg.text && (
             <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 text-sm font-medium animate-in fade-in ${cronMsg.type === 'success' ? 'bg-accent-teal/10 text-accent-teal' : cronMsg.type === 'info' ? 'bg-accent-gold/10 text-accent-gold' : 'bg-accent-rose/10 text-accent-rose'}`}>
-               <CheckCircle2 size={18} /> {cronMsg.text}
+               {cronMsg.type === 'success' ? <CheckCircle2 size={18} /> : 
+                cronMsg.type === 'info' ? <AlertCircle size={18} className="text-accent-gold" /> : 
+                <XCircle size={18} className="text-accent-rose" />} 
+               {cronMsg.text}
             </div>
         )}
 

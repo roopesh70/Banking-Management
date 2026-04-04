@@ -32,6 +32,7 @@ export default function Accounts() {
   // Limit Edit State
   const [editingLimitId, setEditingLimitId] = useState<string | null>(null);
   const [newLimitValue, setNewLimitValue] = useState('');
+  const [limitError, setLimitError] = useState<string | null>(null);
 
   // Kiosk State
   const [kioskAccount, setKioskAccount] = useState('');
@@ -58,8 +59,11 @@ export default function Accounts() {
   }, [customerId]);
 
   const loadAccounts = async () => {
+    if (!customerId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    if (!customerId) return;
     const { data } = await supabase.from('account').select('*, branch:branch_id(branch_name)').eq('customer_id', customerId);
     if (data) {
       setAccounts(data);
@@ -176,8 +180,17 @@ export default function Accounts() {
   };
 
   const cancelInstruction = async (id: string) => {
-    await supabase.from('standing_instruction').update({ status: 'Cancelled' }).eq('instruction_id', id);
-    loadInstructions();
+    if (!window.confirm('Are you sure you want to cancel this standing instruction?')) return;
+
+    try {
+      const { error } = await supabase.from('standing_instruction').update({ status: 'Cancelled' }).eq('instruction_id', id);
+      if (error) throw error;
+      
+      setInstMsg({ text: 'Standing instruction cancelled successfully.', type: 'success' });
+      loadInstructions();
+    } catch (err: any) {
+      setInstMsg({ text: 'Failed to cancel instruction: ' + err.message, type: 'danger' });
+    }
   };
 
   const handleOpenAccount = async (e: React.FormEvent) => {
@@ -217,14 +230,22 @@ export default function Accounts() {
   };
 
   const handleUpdateLimit = async (accId: string) => {
+    setLimitError(null);
     if (!newLimitValue || isNaN(Number(newLimitValue)) || Number(newLimitValue) < 1000) {
-      alert("Please enter a valid limit (minimum 1000).");
+      setLimitError("Minimum limit is ₹1,000.");
       return;
     }
-    await supabase.from('account').update({ daily_transaction_limit: Number(newLimitValue) }).eq('account_id', accId);
-    setEditingLimitId(null);
-    setNewLimitValue('');
-    loadAccounts();
+    
+    try {
+      const { error } = await supabase.from('account').update({ daily_transaction_limit: Number(newLimitValue) }).eq('account_id', accId);
+      if (error) throw error;
+      
+      setEditingLimitId(null);
+      setNewLimitValue('');
+      loadAccounts();
+    } catch (err: any) {
+      setLimitError(err.message || "Failed to update limit.");
+    }
   };
 
   const handleKioskTx = async (e: React.FormEvent) => {
@@ -241,6 +262,12 @@ export default function Accounts() {
     const selectedAcc = accounts.find(a => a.account_id === kioskAccount);
     if (!selectedAcc || selectedAcc.status !== 'Active') {
       setKioskMsg({ text: `This account is ${selectedAcc?.status || 'invalid'} and cannot perform transactions.`, type: 'danger' });
+      setKioskLoading(false);
+      return;
+    }
+
+    if (kioskType === 'Withdrawal' && selectedAcc.balance < parseFloat(kioskAmount)) {
+      setKioskMsg({ text: 'Insufficient balance to complete this withdrawal.', type: 'danger' });
       setKioskLoading(false);
       return;
     }
@@ -287,13 +314,13 @@ export default function Accounts() {
           .no-print { display: none !important; }
         }
       `}</style>
-      
+
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-normal tracking-wide uppercase text-primary">My Accounts</h1>
           <p className="text-sm text-secondary mt-1">Manage accounts, statements, and instructions.</p>
         </div>
-        <button 
+        <button
           onClick={() => setActiveTab('new')}
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium bg-primary text-white hover:bg-[#362e34] transition-all shadow-sm active:scale-95"
         >
@@ -334,18 +361,23 @@ export default function Accounts() {
               </div>
               <div className="flex justify-between items-center text-xs opacity-70">
                 <div className="flex items-center gap-2">
+                  {editingLimitId === acc.account_id && limitError ? (
+                    <div className="absolute top-0 left-0 right-0 -translate-y-full mb-2 bg-accent-rose text-[10px] text-white px-3 py-1 rounded-full text-center animate-in fade-in zoom-in">
+                      {limitError}
+                    </div>
+                  ) : null}
                   {editingLimitId === acc.account_id ? (
                     <div className="flex items-center gap-2 bg-black/20 rounded-full px-2 py-1">
                       <span className="opacity-70">₹</span>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         autoFocus
                         className="w-20 bg-transparent outline-none font-mono text-white text-xs placeholder-white/40"
                         placeholder="Limit"
                         value={newLimitValue}
                         onChange={e => setNewLimitValue(e.target.value)}
-                        onBlur={() => setEditingLimitId(null)}
-                        onKeyDown={e => { if(e.key === 'Enter') handleUpdateLimit(acc.account_id); if(e.key === 'Escape') setEditingLimitId(null); }}
+                        onBlur={() => handleUpdateLimit(acc.account_id)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleUpdateLimit(acc.account_id); if (e.key === 'Escape') setEditingLimitId(null); }}
                       />
                     </div>
                   ) : (
@@ -383,10 +415,10 @@ export default function Accounts() {
 
           <h2 className="text-xl font-semibold text-primary mb-2 text-left px-2">Cash {kioskType}</h2>
           <p className="text-sm text-secondary mb-6 text-left px-2">Instantly add or remove cash securely.</p>
-          
+
           {kioskMsg.text && (
             <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 text-sm font-medium ${kioskMsg.type === 'success' ? 'bg-accent-teal/10 text-accent-teal' : 'bg-accent-rose/10 text-accent-rose'}`}>
-              {kioskMsg.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />} 
+              {kioskMsg.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
               {kioskMsg.text}
             </div>
           )}
@@ -407,9 +439,9 @@ export default function Accounts() {
               <label className="text-sm font-medium text-primary px-2">Amount (₹)</label>
               <input type="number" min="1" step="0.01" className="w-full bg-app text-xl font-mono tracking-wider rounded-[24px] px-5 py-4 focus:outline-none focus:ring-2 focus:ring-secondary/30 border border-transparent" required placeholder="0.00" value={kioskAmount} onChange={e => setKioskAmount(e.target.value)} />
             </div>
-            <button 
-              type="submit" 
-              disabled={!!kioskLoading || !!(kioskAccount && accounts.find(a => a.account_id === kioskAccount)?.status !== 'Active')} 
+            <button
+              type="submit"
+              disabled={!!kioskLoading || !!(kioskAccount && accounts.find(a => a.account_id === kioskAccount)?.status !== 'Active')}
               className={`w-full text-white font-semibold flex items-center justify-center gap-2 py-4 rounded-full transition-all active:scale-95 mt-4 disabled:opacity-50 ${kioskType === 'Deposit' ? 'bg-accent-teal hover:bg-teal-600' : 'bg-primary hover:bg-[#362e34]'}`}
             >
               {kioskLoading ? 'Processing...' : (kioskAccount && accounts.find(a => a.account_id === kioskAccount)?.status !== 'Active') ? `Cannot ${kioskType} (Account ${accounts.find(a => a.account_id === kioskAccount)?.status})` : `Confirm ${kioskType}`}
@@ -437,10 +469,10 @@ export default function Accounts() {
           <div id="print-area" className="bg-white p-6 rounded-2xl print:shadow-none print:w-full print:block">
             <div className="border-b border-gray-200 pb-6 mb-6">
               <h2 className="text-2xl font-semibold text-gray-800 uppercase tracking-wide">AeroBank Mini-Statement</h2>
-              <p className="text-gray-500 text-sm mt-1">Generated on: {formatDateTime(new Date())}</p>
+              <p className="text-gray-500 text-sm mt-1">Generated on: {formatDateTime(new Date().toISOString())}</p>
               <p className="text-gray-700 font-medium mt-4">Account: {accounts.find(a => a.account_id === selectedStatementAccount)?.account_number || 'N/A'}</p>
             </div>
-            
+
             <table className="w-full text-left text-sm text-gray-700">
               <thead>
                 <tr className="border-b border-gray-200">
@@ -477,11 +509,11 @@ export default function Accounts() {
       {activeTab === 'recurring' && (
         <div className="bg-card rounded-[30px] p-8 shadow-sm">
           <div className="flex flex-col md:flex-row gap-8">
-            
+
             {/* Left Side: Create Form */}
             <div className="flex-1 space-y-4">
               <h2 className="text-xl font-semibold text-primary mb-6" id="instruction-form">{editingInstructionId ? 'Modify Recurring Transfer' : 'Setup Recurring Transfer'}</h2>
-              
+
               {instMsg.text && (
                 <div className={`p-4 rounded-xl flex items-center gap-3 text-sm font-medium ${instMsg.type === 'success' ? 'bg-accent-teal/10 text-accent-teal' : 'bg-accent-rose/10 text-accent-rose'}`}>
                   {instMsg.type === 'success' ? <CheckCircle2 size={18} /> : <Repeat size={18} />}
@@ -492,11 +524,11 @@ export default function Accounts() {
               <form onSubmit={handleCreateInstruction} className="space-y-4">
                 <div className="space-y-1">
                   <label className="text-sm text-primary ml-2 font-medium">From Account</label>
-                  <select 
+                  <select
                     className="w-full bg-app rounded-full px-5 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-secondary/30"
                     required
                     value={instForm.fromAccountId}
-                    onChange={e => setInstForm({...instForm, fromAccountId: e.target.value})}
+                    onChange={e => setInstForm({ ...instForm, fromAccountId: e.target.value })}
                   >
                     <option value="" disabled>Select Source</option>
                     {accounts.map(a => <option key={a.account_id} value={a.account_id}>{a.account_type} - {a.account_number}{a.status !== 'Active' ? ` — ${a.status.toUpperCase()}` : ''}</option>)}
@@ -505,11 +537,11 @@ export default function Accounts() {
 
                 <div className="space-y-1">
                   <label className="text-sm text-primary ml-2 font-medium">To My Account</label>
-                  <select 
+                  <select
                     className="w-full bg-app rounded-full px-5 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-secondary/30"
                     required
                     value={instForm.toAccountId}
-                    onChange={e => setInstForm({...instForm, toAccountId: e.target.value})}
+                    onChange={e => setInstForm({ ...instForm, toAccountId: e.target.value })}
                   >
                     <option value="" disabled>Select Destination</option>
                     {accounts.map(a => <option key={`to-${a.account_id}`} value={a.account_id}>{a.account_type} - {a.account_number}{a.status !== 'Active' ? ` — ${a.status.toUpperCase()}` : ''}</option>)}
@@ -525,17 +557,17 @@ export default function Accounts() {
                     className="w-full bg-app rounded-full px-5 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-secondary/30"
                     required
                     value={instForm.amount}
-                    onChange={e => setInstForm({...instForm, amount: e.target.value})}
+                    onChange={e => setInstForm({ ...instForm, amount: e.target.value })}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-sm text-primary ml-2 font-medium">Frequency</label>
-                    <select 
+                    <select
                       className="w-full bg-app rounded-full px-5 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-secondary/30"
                       value={instForm.frequency}
-                      onChange={e => setInstForm({...instForm, frequency: e.target.value})}
+                      onChange={e => setInstForm({ ...instForm, frequency: e.target.value })}
                     >
                       <option value="Daily">Daily</option>
                       <option value="Weekly">Weekly</option>
@@ -550,22 +582,22 @@ export default function Accounts() {
                       required
                       min={new Date().toISOString().split('T')[0]}
                       value={instForm.nextDate}
-                      onChange={e => setInstForm({...instForm, nextDate: e.target.value})}
+                      onChange={e => setInstForm({ ...instForm, nextDate: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div className="flex gap-4">
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     disabled={!!(instLoading || (instForm.fromAccountId && accounts.find(a => a.account_id === instForm.fromAccountId)?.status !== 'Active') || (instForm.toAccountId && accounts.find(a => a.account_id === instForm.toAccountId)?.status !== 'Active'))}
                     className="flex-1 bg-secondary text-white font-medium py-3 rounded-full mt-2 hover:bg-[#6c5e6a] transition-all disabled:opacity-60 flex justify-center items-center gap-2"
                   >
                     <Repeat size={18} /> {instLoading ? 'Saving...' : (instForm.fromAccountId && accounts.find(a => a.account_id === instForm.fromAccountId)?.status !== 'Active') || (instForm.toAccountId && accounts.find(a => a.account_id === instForm.toAccountId)?.status !== 'Active') ? 'Cannot Set Instruction (Account Not Active)' : (editingInstructionId ? 'Update Instruction' : 'Set Standing Instruction')}
                   </button>
                   {editingInstructionId && (
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={cancelEditing}
                       className="px-6 bg-app text-primary font-medium py-3 rounded-full mt-2 hover:bg-black/5 transition-all"
                     >
@@ -579,7 +611,7 @@ export default function Accounts() {
             {/* Right Side: List of Instructions */}
             <div className="flex-1 bg-app rounded-[24px] p-6 h-fit max-h-[500px] overflow-y-auto">
               <h3 className="text-sm uppercase tracking-wide text-secondary mb-4 font-semibold">Active Instructions</h3>
-              
+
               {instructions.length === 0 ? (
                 <div className="text-center py-10 text-secondary text-sm">
                   No standing instructions set up yet.
@@ -611,7 +643,7 @@ export default function Accounts() {
                           </>
                         )}
                         {inst.status === 'Active' && (
-                           <button onClick={() => cancelInstruction(inst.instruction_id)} className="text-[11px] text-accent-rose hover:underline font-medium">Cancel Schedule</button>
+                          <button onClick={() => cancelInstruction(inst.instruction_id)} className="text-[11px] text-accent-rose hover:underline font-medium">Cancel Schedule</button>
                         )}
                       </div>
                     </div>
@@ -658,7 +690,7 @@ export default function Accounts() {
                   <Landmark size={18} className="text-secondary" /> Select Home Branch
                 </label>
                 <p className="text-[13px] text-secondary ml-2 mb-3">Your new account will be permanently linked to this physical branch location (REQ-22).</p>
-                <select 
+                <select
                   className="w-full bg-card text-primary border border-black/5 rounded-2xl px-5 py-4 text-[15px] focus:outline-none focus:ring-2 focus:ring-secondary/30 appearance-none shadow-sm cursor-pointer"
                   value={selectedBranchId}
                   onChange={e => setSelectedBranchId(e.target.value)}

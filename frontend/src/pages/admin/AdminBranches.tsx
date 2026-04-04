@@ -10,14 +10,16 @@ export default function AdminBranches() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ branch_name: '', address: '', pincode: '' });
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { user } = useAuth();
 
   async function loadData() {
     setLoading(true);
+    setLoadError(null);
     const { data, error } = await supabase.from('branch').select('*').order('branch_name');
     if (error) {
+      setLoadError(error.message);
       console.error('Failed to load branches:', error.message);
-      // Consider adding toast notification or error state
     } else if (data) {
       setBranches(data);
     }
@@ -27,15 +29,33 @@ export default function AdminBranches() {
   useEffect(() => { loadData(); }, []);
 
   const handleSave = async () => {
-    if (editId) {
-      await supabase.from('branch').update(form).eq('branch_id', editId);
-    } else {
-      await supabase.from('branch').insert([form]);
+    // Validation
+    if (!form.branch_name.trim() || !form.address.trim()) {
+      alert("Branch Name and Address are required.");
+      return;
     }
-    setShowForm(false);
-    setEditId(null);
-    setForm({ branch_name: '', address: '', pincode: '' });
-    loadData();
+    if (!/^\d{6}$/.test(form.pincode)) {
+      alert("Pincode must be exactly 6 digits.");
+      return;
+    }
+
+    try {
+      let error;
+      if (editId) {
+        ({ error } = await supabase.from('branch').update(form).eq('branch_id', editId));
+      } else {
+        ({ error } = await supabase.from('branch').insert([form]));
+      }
+
+      if (error) throw error;
+
+      setShowForm(false);
+      setEditId(null);
+      setForm({ branch_name: '', address: '', pincode: '' });
+      loadData();
+    } catch (err: any) {
+      alert(`Save failed: ${err.message}`);
+    }
   };
 
   const startEdit = (b: any) => {
@@ -69,6 +89,16 @@ export default function AdminBranches() {
           </button>
         )}
       </div>
+
+      {/* Error Banner */}
+      {loadError && (
+        <div className="mb-6 p-4 bg-accent-rose/10 border border-accent-rose/20 rounded-2xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 text-accent-rose text-sm font-medium">
+            <X size={18} /> Error: {loadError}
+          </div>
+          <button onClick={loadData} className="px-4 py-1.5 bg-accent-rose text-white text-[12px] font-bold rounded-full hover:bg-rose-600 transition-all uppercase tracking-wider">Retry</button>
+        </div>
+      )}
 
       {/* Add/Edit Form Slide-Down */}
       {showForm && (

@@ -1,2 +1,2 @@
-﻿D:\D_PROJECTS\S4\BANKING\Banking-Management\frontend\node_modules\@fontsource-variable\geist\index.css
-D:\D_PROJECTS\S4\BANKING\Banking-Management\frontend\src\index.css
+﻿node_modules/@fontsource-variable/geist/index.css
+src/index.css
